@@ -1,0 +1,96 @@
+{.define: ssl.}
+
+import std/asyncdispatch
+import std/streams
+
+import pkg/hyperx/client
+import pkg/protobuf
+
+const protoDef = """
+syntax = "proto3";
+
+message HelloRequest {
+  string name = 1;
+}
+
+message HelloReply {
+  string message = 1;
+}
+"""
+parseProto(protoDef)
+
+func newSeqRef[T](s: seq[T]): ref seq[T] =
+  result = new(seq[T])
+  result[] = s
+
+func newStringRef(s = ""): ref string =
+  new result
+  result[] = s
+
+func add(s: var string, ss: openArray[char]) {.raises: [].} =
+  let L = s.len
+  s.setLen(L+ss.len)
+  for i in 0 .. ss.len-1:
+    s[L+i] = ss[i]
+
+func toWireData(msg: string): string =
+  template ones(n: untyped): uint = (1.uint shl n) - 1
+  let L = msg.len.uint
+  result = newStringOfCap(msg.len+5)
+  result.setLen 5
+  result[0] = 0.char  # uncompressed
+  result[1] = ((L shr 24) and 8.ones).char
+  result[2] = ((L shr 16) and 8.ones).char
+  result[3] = ((L shr 8) and 8.ones).char
+  result[4] = (L and 8.ones).char
+  result.add msg
+
+func fromWireData(data: string): string =
+  doAssert data.len >= 5
+  doAssert data[0] == 0.char  # XXX uncompress
+  template ones(n: untyped): uint = (1.uint shl n) - 1
+  result = newStringOfCap(data.len-5)
+  result.add toOpenArray(data, 5, data.len-1)
+
+proc main() {.async.} =
+  var client = newClient("127.0.0.1", Port 50051)
+  withClient(client):
+    let strm = client.newClientStream()
+    withStream strm:
+      var msg = new HelloRequest
+      msg.name = "you"
+      var dummy = newStringStream()
+      dummy.write(msg)
+      dummy.setPosition(0)
+      let msgRaw = dummy.readAll()
+      var data = newStringRef(toWireData(msgRaw))
+      await strm.sendHeaders(
+        newSeqRef[(string, string)](@[
+          (":method", "POST"),
+          (":scheme", "https"),
+          (":path", "/helloworld.Greeter/SayHello"),
+          (":authority", "localhost"),
+          ("te", "trailers"),
+          ("grpc-encoding", "identity"),
+          ("grpc-accept-encoding", "identity"),
+          ("user-agent", "grpc-nim/0.1.0"),
+          ("content-type", "application/grpc+proto"),
+          ("content-length", $data[].len)
+        ]),
+        finish = false
+      )
+      await strm.sendBody(data, finish = true)
+      data[].setLen 0
+      await strm.recvHeaders(data)
+      debugEcho data[]
+      data[].setLen 0
+      while not strm.recvEnded:
+        await strm.recvBody(data)
+      var dummy2 = newStringStream()
+      dummy2.write fromWireData(data[])
+      dummy2.setPosition(0)
+      var readMsg = dummy2.readHelloRequest()
+      if readMsg.has(name):
+        echo readMsg.name
+
+waitFor main()
