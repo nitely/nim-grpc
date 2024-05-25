@@ -34,6 +34,80 @@ func add(s: var string, ss: openArray[char]) {.raises: [].} =
   for i in 0 .. ss.len-1:
     s[L+i] = ss[i]
 
+iterator headersIt(s: string): (Slice[int], Slice[int]) {.inline.} =
+  let L = s.len
+  var na = 0
+  var nb = 0
+  var va = 0
+  var vb = 0
+  while na < L:
+    nb = na
+    nb += int(s[na] == ':')  # pseudo-header
+    nb = find(s, ':', nb)
+    doAssert nb != -1
+    assert s[nb] == ':'
+    assert s[nb+1] == ' '
+    va = nb+2  # skip :\s
+    vb = find(s, '\r', va)
+    doAssert vb != -1
+    assert s[vb] == '\r'
+    assert s[vb+1] == '\n'
+    yield (na .. nb-1, va .. vb-1)
+    doAssert vb+2 > na
+    na = vb+2  # skip /r/n
+
+type StatusCode = distinct uint8
+const
+  stcOk = 0.StatusCode
+  stcCancelled = 1.StatusCode
+  stcUnknown = 2.StatusCode
+  stcInvalidArg = 3.StatusCode
+  stcDeadlineEx = 4.StatusCode
+  stcNotFound = 5.StatusCode
+  stcAlreadyExists = 6.StatusCode
+  stcPermissionDenied = 7.StatusCode
+  stcResourceExhausted = 8.StatusCode
+  stcFailedPrecondition = 9.StatusCode
+  stcAborted = 10.StatusCode
+  stcOutOfRange = 11.StatusCode
+  stcUnimplemented = 12.StatusCode
+  stcInternal = 13.StatusCode
+  stcUnavailable = 14.StatusCode
+  stcDataLoss = 15.StatusCode
+  stcUnauthenticated = 16.StatusCode
+  stcBadStatusCode = 0xfe.StatusCode
+
+func parseStatusCode(raw: openArray[char]): StatusCode =
+  if raw.len notin 1 .. 2:
+    return stcBadStatusCode
+  for x in raw:
+    if x.ord notin '0'.ord .. '9'.ord:
+      return stcBadStatusCode
+  var code = raw[0].ord - '0'.ord
+  if raw.len > 1:
+    code = code * 10 + (raw[1].ord - '0'.ord)
+  if code > 16:
+    return stcBadStatusCode
+  return code.StatusCode
+
+type ResponseHeaders = ref object
+  status: StatusCode
+  statusMsg: string
+
+func newResponseHeaders(): ResponseHeaders =
+  ResponseHeaders(
+    status: stcOk,
+    statusMsg: ""
+  )
+
+func toResponseHeaders(s: string): ResponseHeaders =
+  result = newResponseHeaders()
+  for (nn, vv) in headersIt s:
+    if toOpenArray(s, nn.a, nn.b) == "grpc-status":
+      result.status = parseStatusCode toOpenArray(s, vv.a, vv.b)
+    elif toOpenArray(s, nn.a, nn.b) == "grpc-message":
+      result.statusMsg = s[vv]
+
 func toWireData(msg: string): string =
   template ones(n: untyped): uint = (1.uint shl n) - 1
   let L = msg.len.uint
@@ -124,6 +198,8 @@ proc main() {.async.} =
         debugEcho err.msg
         connErr = err
       echo headersIn[]
+      let respHeaders = toResponseHeaders headersIn[]
+      echo respHeaders.repr
       if connErr != nil:
         raise (ref HyperxConnError)(msg: connErr.msg)
       if strmErr != nil:
