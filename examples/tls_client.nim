@@ -4,6 +4,7 @@ import std/asyncdispatch
 import std/streams
 
 import pkg/hyperx/client
+import pkg/hyperx/utils
 import pkg/protobuf
 
 const protoDef = """
@@ -45,52 +46,91 @@ func toWireData(msg: string): string =
   result[4] = (L and 8.ones).char
   result.add msg
 
+proc encode[T](s: T): string =
+  var ss = newStringStream()
+  ss.write s
+  ss.setPosition 0
+  result = ss.readAll.toWireData
+
 func fromWireData(data: string): string =
   doAssert data.len >= 5
   doAssert data[0] == 0.char  # XXX uncompress
-  template ones(n: untyped): uint = (1.uint shl n) - 1
   result = newStringOfCap(data.len-5)
   result.add toOpenArray(data, 5, data.len-1)
 
+proc decode(s: string): StringStream =
+  result = newStringStream()
+  result.write fromWireData(s)
+  result.setPosition(0)
+
+proc recv(
+  strm: ClientStream,
+  headers, data: ref string
+) {.async.} =
+  await strm.recvHeaders(headers)
+  while not strm.recvEnded:
+    await strm.recvBody(data)
+
+proc send(
+  strm: ClientStream,
+  data: ref string
+) {.async.} =
+  await strm.sendHeaders(
+    newSeqRef(@[
+      (":method", "POST"),
+      (":scheme", "https"),
+      (":path", "/helloworld.Greeter/SayHello"),
+      (":authority", "localhost"),
+      ("te", "trailers"),
+      ("grpc-encoding", "identity"),
+      ("grpc-accept-encoding", "identity"),
+      ("user-agent", "grpc-nim/0.1.0"),
+      ("content-type", "application/grpc+proto"),
+      ("content-length", $data[].len)
+    ]),
+    finish = false
+  )
+  await strm.sendBody(data, finish = true)
+
 proc main() {.async.} =
   var client = newClient("127.0.0.1", Port 50051)
-  withClient(client):
+  withClient client:
     let strm = client.newClientStream()
     withStream strm:
-      var msg = new HelloRequest
+      # start recv before send in case of error
+      let headersIn = newStringRef()
+      let dataIn = newStringRef()
+      let recvFut = strm.recv(headersIn, dataIn)
+      let msg = new HelloRequest
       msg.name = "you"
-      var dummy = newStringStream()
-      dummy.write(msg)
-      dummy.setPosition(0)
-      let msgRaw = dummy.readAll()
-      var data = newStringRef(toWireData(msgRaw))
-      await strm.sendHeaders(
-        newSeqRef[(string, string)](@[
-          (":method", "POST"),
-          (":scheme", "https"),
-          (":path", "/helloworld.Greeter/SayHello"),
-          (":authority", "localhost"),
-          ("te", "trailers"),
-          ("grpc-encoding", "identity"),
-          ("grpc-accept-encoding", "identity"),
-          ("user-agent", "grpc-nim/0.1.0"),
-          ("content-type", "application/grpc+proto"),
-          ("content-length", $data[].len)
-        ]),
-        finish = false
-      )
-      await strm.sendBody(data, finish = true)
-      data[].setLen 0
-      await strm.recvHeaders(data)
-      debugEcho data[]
-      data[].setLen 0
-      while not strm.recvEnded:
-        await strm.recvBody(data)
-      var dummy2 = newStringStream()
-      dummy2.write fromWireData(data[])
-      dummy2.setPosition(0)
-      var readMsg = dummy2.readHelloRequest()
-      if readMsg.has(name):
-        echo readMsg.name
+      let dataOut = newStringRef(encode(msg))
+      let sendFut = strm.send(dataOut)
+      var connErr: ref HyperxConnError = nil
+      var strmErr: ref HyperxStrmError = nil
+      try:
+        await sendFut
+      except HyperxStrmError as err:
+        debugEcho err.msg
+        strmErr = err
+      except HyperxConnError as err:
+        debugEcho err.msg
+        connErr = err
+      try:
+        await recvFut
+      except HyperxStrmError as err:
+        debugEcho err.msg
+        strmErr = err
+      except HyperxConnError as err:
+        debugEcho err.msg
+        connErr = err
+      echo headersIn[]
+      if connErr != nil:
+        raise (ref HyperxConnError)(msg: connErr.msg)
+      if strmErr != nil:
+        raise (ref HyperxStrmError)(msg: strmErr.msg)
+      if dataIn[].len > 0:
+        let readMsg = dataIn[].decode().readHelloRequest()
+        if readMsg.has(name):
+          echo readMsg.name
 
 waitFor main()

@@ -8,7 +8,7 @@ srcDir = "src"
 skipDirs = @["tests", "examples"]
 
 requires "nim >= 2.0.0"
-requires "hyperx >= 0.1.14"
+requires "hyperx >= 0.1.15"
 requires "protobuf >= 0.5.4"
 
 #task test, "Test":
