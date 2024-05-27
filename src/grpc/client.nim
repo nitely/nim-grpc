@@ -1,6 +1,4 @@
-
 import std/asyncdispatch
-import std/streams
 
 import pkg/hyperx/client
 

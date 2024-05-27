@@ -62,14 +62,14 @@ proc decode(s: string): StringStream =
 proc main() {.async.} =
   var client = newClient("127.0.0.1", Port 50051)
   withClient client:
-    let msg = new HelloRequest
-    msg.name = "you"
+    let request = new HelloRequest
+    request.name = "you"
     let data = await client.get(
       newStringRef("/helloworld.Greeter/SayHello"),
-      newStringRef(encode(msg))
+      newStringRef(encode(request))
     )
-    let readMsg = data[].decode().readHelloRequest()
-    if readMsg.has(name):
-      echo readMsg.name
+    let reply = data[].decode().readHelloReply()
+    if reply.has(message):
+      echo reply.message
 
 waitFor main()
