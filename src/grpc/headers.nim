@@ -25,29 +25,29 @@ iterator headersIt(s: string): (Slice[int], Slice[int]) {.inline.} =
 
 func parseStatusCode(raw: openArray[char]): StatusCode =
   if raw.len notin 1 .. 2:
-    return stcBadStatusCode
+    return stcUnknown
   for x in raw:
     if x.ord notin '0'.ord .. '9'.ord:
-      return stcBadStatusCode
+      return stcUnknown
   var code = raw[0].ord - '0'.ord
   if raw.len > 1:
     code = code * 10 + (raw[1].ord - '0'.ord)
   if code > 16:
-    return stcBadStatusCode
+    return stcUnknown
   return code.StatusCode
 
 type ResponseHeaders* = ref object
   status*: StatusCode
   statusMsg*: string
 
-func newResponseHeaders(): ResponseHeaders =
+func newResponseHeaders(status: StatusCode): ResponseHeaders =
   ResponseHeaders(
-    status: stcOk,
+    status: status,
     statusMsg: ""
   )
 
 func toResponseHeaders*(s: string): ResponseHeaders =
-  result = newResponseHeaders()
+  result = newResponseHeaders(stcUnknown)
   for (nn, vv) in headersIt s:
     if toOpenArray(s, nn.a, nn.b) == "grpc-status":
       result.status = parseStatusCode toOpenArray(s, vv.a, vv.b)

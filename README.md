@@ -10,6 +10,16 @@ It works on top of [hyperx](https://github.com/nitely/nim-hyperx).
 
 > Nim +2.0
 
+## ToDo
+
+- [] Client
+- [] Server
+- [] Code gen proto Service
+- [] Compression
+- [] JSON
+- [] UDS
+- [] non-TLS
+
 ## LICENSE
 
 MIT

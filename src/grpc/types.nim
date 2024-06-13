@@ -19,4 +19,3 @@ const
   stcUnavailable* = 14.StatusCode
   stcDataLoss* = 15.StatusCode
   stcUnauthenticated* = 16.StatusCode
-  stcBadStatusCode* = 0xfe.StatusCode

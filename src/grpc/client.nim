@@ -20,74 +20,88 @@ func newStringRef(s = ""): ref string =
   new result
   result[] = s
 
-proc recv(
-  strm: ClientStream,
-  headers, data: ref string
+proc sendHeaders(
+  strm: ClientStream, path: ref string, contentLen = -1
 ) {.async.} =
-  await strm.recvHeaders(headers)
-  while not strm.recvEnded:
-    await strm.recvBody(data)
-
-proc send(
-  strm: ClientStream,
-  path: ref string,
-  data: ref string
-) {.async.} =
+  var headers = @[
+    (":method", "POST"),
+    (":scheme", "https"),
+    (":path", path[]),
+    (":authority", strm.client.hostname),
+    ("te", "trailers"),
+    ("grpc-encoding", "identity"),
+    ("grpc-accept-encoding", "identity"),
+    ("user-agent", "grpc-nim/0.1.0"),
+    ("content-type", "application/grpc+proto")
+  ]
+  if contentLen > -1:
+    headers.add ("content-length", $contentLen)
   await strm.sendHeaders(
-    newSeqRef(@[
-      (":method", "POST"),
-      (":scheme", "https"),
-      (":path", path[]),
-      (":authority", strm.client.hostname),
-      ("te", "trailers"),
-      ("grpc-encoding", "identity"),
-      ("grpc-accept-encoding", "identity"),
-      ("user-agent", "grpc-nim/0.1.0"),
-      ("content-type", "application/grpc+proto"),
-      ("content-length", $data[].len)
-    ]),
+    newSeqRef(headers),
     finish = false
   )
-  await strm.sendBody(data, finish = true)
 
-proc get*(
-  client: ClientContext,
-  path: ref string,
-  data: ref string
-): Future[ref string] {.async.} =
-  let strm = client.newClientStream()
-  withStream strm:
-    # start recv before send in case of error
-    result = newStringRef()
-    let headersIn = newStringRef()
-    let recvFut = strm.recv(headersIn, result)
-    let sendFut = strm.send(path, data)
-    var connErr: ref HyperxConnError = nil
-    var strmErr: ref HyperxStrmError = nil
-    try:
-      await sendFut
-    except HyperxStrmError as err:
-      debugEcho err.msg
-      strmErr = err
-    except HyperxConnError as err:
-      debugEcho err.msg
-      connErr = err
-    try:
-      await recvFut
-    except HyperxStrmError as err:
-      debugEcho err.msg
-      strmErr = err
-    except HyperxConnError as err:
-      debugEcho err.msg
-      connErr = err
-    #echo headersIn[]
+type GrpcStream* = ref object
+  stream: ClientStream
+  path: ref string
+
+proc newGrpcStream*(client: ClientContext, path: ref string): GrpcStream =
+  GrpcStream(
+    stream: newClientStream(client),
+    path: path
+  )
+
+proc failSilently(fut: Future[void]) {.async.} =
+  try:
+    if fut != nil:
+      await fut
+  except HyperxError as err:
+    debugEcho err.msg
+
+template with*(strm: GrpcStream, body: untyped) =
+  let headersIn = newStringRef()
+  var sendFut, recvFut: Future[void]
+  try:
+    withStream strm.stream:
+      recvFut = strm.stream.recvHeaders(headersIn)
+      sendFut = strm.stream.sendHeaders(strm.path)
+      block:
+        body
+      # XXX cancel stream if not recvEnded, and error out
+      # XXX send/recv trailers
+      if not strm.stream.sendEnded:
+        await strm.stream.sendBody(newStringRef(), finish = true)
+  except HyperxError as err:
+    debugEcho err.msg
+  finally:
+    await failSilently(recvFut)
+    await failSilently(sendFut)
+  #debugEcho headersIn[]
+  # XXX remove if condition; parse trailers
+  if not strm.stream.recvEnded:
     let respHeaders = toResponseHeaders headersIn[]
     if respHeaders.status != stcOk:
       raise newGrpcResponseError(
         respHeaders.statusMsg,
         respHeaders.status
       )
-    if connErr != nil:
-      raise (ref HyperxConnError)(msg: connErr.msg)
-    if strmErr != nil:
-      raise (ref HyperxStrmError)(msg: strmErr.msg)
+
+proc recvBodyFull(
+  strm: ClientStream,
+  data: ref string
+) {.async.} =
+  while not strm.recvEnded:
+    await strm.recvBody(data)
+
+proc get*(
+  client: ClientContext,
+  path, data: ref string
+): Future[ref string] {.async.} =
+  result = newStringRef()
+  let strm = client.newGrpcStream(path)
+  with strm:
+    let recvFut = strm.stream.recvBodyFull(result)
+    try:
+      await strm.stream.sendBody(data, finish = true)
+    finally:
+      await recvFut

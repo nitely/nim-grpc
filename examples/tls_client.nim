@@ -59,17 +59,47 @@ proc decode(s: string): StringStream =
   result.write fromWireData(s)
   result.setPosition(0)
 
+proc sayHello(
+  client: ClientContext, request: HelloRequest
+): Future[HelloReply] {.async.} =
+  let data = await client.get(
+    newStringRef("/helloworld.Greeter/SayHello"),
+    newStringRef(encode(request))
+  )
+  result = data[].decode().readHelloReply()
+
+proc sayHelloStreamReply(client: ClientContext): GrpcStream =
+  client.newGrpcStream(
+    newStringRef("/helloworld.Greeter/SayHelloStreamReply")
+  )
+
 proc main() {.async.} =
   var client = newClient("127.0.0.1", Port 50051)
   withClient client:
-    let request = new HelloRequest
-    request.name = "you"
-    let data = await client.get(
-      newStringRef("/helloworld.Greeter/SayHello"),
-      newStringRef(encode(request))
-    )
-    let reply = data[].decode().readHelloReply()
-    if reply.has(message):
-      echo reply.message
+    block:
+      let request = new HelloRequest
+      request.name = "you"
+      let reply = await client.sayHello(request)
+      if reply.has(message):
+        echo reply.message
+    when false:
+      let stream = client.sayHelloStreamReply()
+      with stream:
+        let request = new HelloRequest
+        request.name = "you"
+        await stream.helloRequest(request)
+        while not stream.ended:
+          let reply = await stream.helloReply()
+          if reply.has(message):
+            echo reply.message
+    when false:
+      let stream = client.sayHelloBidiStream()
+      with stream:
+        let request = new HelloRequest
+        request.name = "you"
+        await stream.helloRequest(request)
+        let reply = await stream.helloReply()
+        if reply.has(message):
+          echo reply.message
 
 waitFor main()
