@@ -76,15 +76,14 @@ template with*(strm: GrpcStream, body: untyped) =
   finally:
     await failSilently(recvFut)
     await failSilently(sendFut)
+  headersIn[].add strm.stream.recvTrailers
   #debugEcho headersIn[]
-  # XXX remove if condition; parse trailers
-  if not strm.stream.recvEnded:
-    let respHeaders = toResponseHeaders headersIn[]
-    if respHeaders.status != stcOk:
-      raise newGrpcResponseError(
-        respHeaders.statusMsg,
-        respHeaders.status
-      )
+  let respHeaders = toResponseHeaders headersIn[]
+  if respHeaders.status != stcOk:
+    raise newGrpcResponseError(
+      respHeaders.statusMsg,
+      respHeaders.status
+    )
 
 proc recvBodyFull(
   strm: ClientStream,
