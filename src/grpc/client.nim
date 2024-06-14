@@ -10,7 +10,8 @@ export
   ClientContext,
   newClient,
   withClient,
-  GrpcResponseError
+  GrpcResponseError,
+  `==`
 
 func newSeqRef[T](s: seq[T]): ref seq[T] =
   result = new(seq[T])
@@ -51,6 +52,20 @@ proc newGrpcStream*(client: ClientContext, path: ref string): GrpcStream =
     path: path
   )
 
+proc recvEnded*(strm: GrpcStream): bool =
+  result = strm.stream.recvEnded()
+
+proc recvBody*(strm: GrpcStream, data: ref string) {.async.} =
+  # XXX buffer data in GrpcStream, return single record
+  await strm.stream.recvBody(data)
+
+proc sendBody*(
+  strm: GrpcStream,
+  data: ref string,
+  finish = false
+) {.async.} =
+  await strm.stream.sendBody(data, finish)
+
 proc failSilently(fut: Future[void]) {.async.} =
   try:
     if fut != nil:
@@ -58,7 +73,7 @@ proc failSilently(fut: Future[void]) {.async.} =
   except HyperxError as err:
     debugEcho err.msg
 
-template with*(strm: GrpcStream, body: untyped) =
+template with*(strm: GrpcStream, body: untyped): untyped =
   let headersIn = newStringRef()
   var sendFut, recvFut: Future[void]
   try:

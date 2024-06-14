@@ -73,6 +73,20 @@ proc sayHelloStreamReply(client: ClientContext): GrpcStream =
     newStringRef("/helloworld.Greeter/SayHelloStreamReply")
   )
 
+proc helloRequest(
+  strm: GrpcStream,
+  request: HelloRequest,
+  finish = false
+) {.async.} =
+  await strm.sendBody(
+    newStringRef(encode(request)), finish
+  )
+
+proc helloReply(strm: GrpcStream): Future[HelloReply] {.async.} =
+  let data = newStringRef()
+  await strm.recvBody(data)
+  result = data[].decode().readHelloReply()
+
 proc main() {.async.} =
   var client = newClient("127.0.0.1", Port 50051)
   withClient client:
@@ -82,13 +96,13 @@ proc main() {.async.} =
       let reply = await client.sayHello(request)
       if reply.has(message):
         echo reply.message
-    when false:
+    block:
       let stream = client.sayHelloStreamReply()
       with stream:
         let request = new HelloRequest
         request.name = "you"
-        await stream.helloRequest(request)
-        while not stream.ended:
+        await stream.helloRequest(request, finish = true)
+        while not stream.recvEnded:
           let reply = await stream.helloReply()
           if reply.has(message):
             echo reply.message
