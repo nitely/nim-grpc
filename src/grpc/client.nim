@@ -1,4 +1,5 @@
 import std/asyncdispatch
+import std/strbasics
 
 import pkg/hyperx/client
 
@@ -45,19 +46,39 @@ proc sendHeaders(
 type GrpcStream* = ref object
   stream: ClientStream
   path: ref string
+  buff: ref string
 
 proc newGrpcStream*(client: ClientContext, path: ref string): GrpcStream =
   GrpcStream(
     stream: newClientStream(client),
-    path: path
+    path: path,
+    buff: newStringRef()
   )
 
 proc recvEnded*(strm: GrpcStream): bool =
   result = strm.stream.recvEnded()
 
+func recordSize(data: string): int =
+  doAssert data.len >= 5
+  var L = 0'u32
+  L += data[1].uint32 shl 24
+  L += data[2].uint32 shl 16
+  L += data[3].uint32 shl 8
+  L += data[4].uint32
+  # XXX check bit 31 is not set
+  result = L.int+5
+
+func hasFullRecord(data: string): bool =
+  if data.len < 5:
+    return false
+  result = data.len >= data.recordSize
+
 proc recvBody*(strm: GrpcStream, data: ref string) {.async.} =
-  # XXX buffer data in GrpcStream, return single record
-  await strm.stream.recvBody(data)
+  while not strm.recvEnded and not strm.buff[].hasFullRecord:
+    await strm.stream.recvBody(strm.buff)
+  let L = strm.buff[].recordSize
+  data[].add toOpenArray(strm.buff[], 0, L-1)
+  strm.buff[].setSlice L .. strm.buff[].len-1
 
 proc sendBody*(
   strm: GrpcStream,
