@@ -119,10 +119,13 @@ template with*(strm: GrpcStream, body: untyped): untyped =
       # XXX send/recv trailers
       if not strm.stream.sendEnded:
         await strm.sendBody(newStringRef(), finish = true)
-  except HyperxError as err:
-    debugEcho err.msg
-  except GrpcFailure as err:
-    debugEcho err.msg
+      if not strm.recvEnded:
+        let recvData = newStringRef()
+        await strm.recvBody(recvData)
+        check recvData[].len == 0
+        check strm.recvEnded
+  except HyperxError, GrpcFailure:
+    #debugEcho err.msg
     failure = true
   finally:
     await failSilently(recvFut)
