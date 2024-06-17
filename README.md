@@ -12,13 +12,13 @@ It works on top of [hyperx](https://github.com/nitely/nim-hyperx).
 
 ## ToDo
 
-- [] Client
-- [] Server
-- [] Code gen proto Service
-- [] Compression
-- [] JSON
-- [] UDS
-- [] non-TLS
+- [x] Client
+- [ ] Server
+- [ ] Code gen proto Service
+- [ ] Compression
+- [ ] JSON
+- [ ] UDS
+- [ ] non-TLS
 
 ## LICENSE
 
