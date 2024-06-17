@@ -14,6 +14,11 @@ export
   GrpcResponseError,
   `==`
 
+template check(cond: untyped): untyped =
+  {.line: instantiationInfo(fullPaths = true).}:
+    if not cond:
+      raise newGrpcFailure()
+
 func newSeqRef[T](s: seq[T]): ref seq[T] =
   result = new(seq[T])
   result[] = s
@@ -46,19 +51,23 @@ proc sendHeaders(
 type GrpcStream* = ref object
   stream: ClientStream
   path: ref string
+  headers: ref string
   buff: ref string
 
 proc newGrpcStream*(client: ClientContext, path: ref string): GrpcStream =
   GrpcStream(
     stream: newClientStream(client),
     path: path,
+    headers: newStringRef(),
     buff: newStringRef()
   )
 
 proc recvEnded*(strm: GrpcStream): bool =
-  result = strm.stream.recvEnded()
+  result = strm.stream.recvEnded() and strm.buff[].len == 0
 
 func recordSize(data: string): int =
+  if data.len == 0:
+    return 0
   doAssert data.len >= 5
   var L = 0'u32
   L += data[1].uint32 shl 24
@@ -74,8 +83,11 @@ func hasFullRecord(data: string): bool =
   result = data.len >= data.recordSize
 
 proc recvBody*(strm: GrpcStream, data: ref string) {.async.} =
-  while not strm.recvEnded and not strm.buff[].hasFullRecord:
+  ## Adds a single record to data. It will add nothing
+  ## if recv ends.
+  while not strm.stream.recvEnded and not strm.buff[].hasFullRecord:
     await strm.stream.recvBody(strm.buff)
+  check strm.buff[].hasFullRecord or strm.buff[].len == 0
   let L = strm.buff[].recordSize
   data[].add toOpenArray(strm.buff[], 0, L-1)
   strm.buff[].setSlice L .. strm.buff[].len-1
@@ -95,34 +107,39 @@ proc failSilently(fut: Future[void]) {.async.} =
     debugEcho err.msg
 
 template with*(strm: GrpcStream, body: untyped): untyped =
-  let headersIn = newStringRef()
+  var failure = false
   var sendFut, recvFut: Future[void]
   try:
     withStream strm.stream:
-      recvFut = strm.stream.recvHeaders(headersIn)
+      recvFut = strm.stream.recvHeaders(strm.headers)
       sendFut = strm.stream.sendHeaders(strm.path)
       block:
         body
       # XXX cancel stream if not recvEnded, and error out
       # XXX send/recv trailers
       if not strm.stream.sendEnded:
-        await strm.stream.sendBody(newStringRef(), finish = true)
+        await strm.sendBody(newStringRef(), finish = true)
   except HyperxError as err:
     debugEcho err.msg
+  except GrpcFailure as err:
+    debugEcho err.msg
+    failure = true
   finally:
     await failSilently(recvFut)
     await failSilently(sendFut)
-  headersIn[].add strm.stream.recvTrailers
-  #debugEcho headersIn[]
-  let respHeaders = toResponseHeaders headersIn[]
+  strm.headers[].add strm.stream.recvTrailers
+  #debugEcho strm.headers[]
+  let respHeaders = toResponseHeaders strm.headers[]
   if respHeaders.status != stcOk:
     raise newGrpcResponseError(
       respHeaders.statusMsg,
       respHeaders.status
     )
+  if failure:
+    raise newGrpcFailure()
 
 proc recvBodyFull(
-  strm: ClientStream,
+  strm: GrpcStream,
   data: ref string
 ) {.async.} =
   while not strm.recvEnded:
@@ -135,8 +152,8 @@ proc get*(
   result = newStringRef()
   let strm = client.newGrpcStream(path)
   with strm:
-    let recvFut = strm.stream.recvBodyFull(result)
+    let recvFut = strm.recvBodyFull(result)
     try:
-      await strm.stream.sendBody(data, finish = true)
+      await strm.sendBody(data, finish = true)
     finally:
       await recvFut
