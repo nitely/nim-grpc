@@ -1,11 +1,15 @@
+{.define: ssl.}
+
 import std/asyncdispatch
 import std/strbasics
 
 import pkg/hyperx/client
 
+#import ./clientserver
 import ./errors
 import ./headers
 import ./types
+import ./utils
 
 export
   ClientContext,
@@ -13,19 +17,6 @@ export
   withClient,
   GrpcResponseError,
   `==`
-
-template check(cond: untyped): untyped =
-  {.line: instantiationInfo(fullPaths = true).}:
-    if not cond:
-      raise newGrpcFailure()
-
-func newSeqRef[T](s: seq[T]): ref seq[T] =
-  result = new(seq[T])
-  result[] = s
-
-func newStringRef(s = ""): ref string =
-  new result
-  result[] = s
 
 proc sendHeaders(
   strm: ClientStream, path: ref string, contentLen = -1

@@ -53,3 +53,15 @@ func toResponseHeaders*(s: string): ResponseHeaders =
       result.status = parseStatusCode toOpenArray(s, vv.a, vv.b)
     elif toOpenArray(s, nn.a, nn.b) == "grpc-message":
       result.statusMsg = s[vv]
+
+type RequestHeaders* = ref object
+  path*: string
+
+func newRequestHeaders(): RequestHeaders =
+  RequestHeaders()
+
+func toRequestHeaders*(s: string): RequestHeaders =
+  result = newRequestHeaders()
+  for (nn, vv) in headersIt s:
+    if toOpenArray(s, nn.a, nn.b) == ":path":
+      result.path = s[vv.a .. vv.b]

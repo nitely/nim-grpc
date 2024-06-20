@@ -2,6 +2,13 @@
 import std/streams
 import std/strbasics
 
+import ./errors
+
+template check*(cond: untyped): untyped =
+  {.line: instantiationInfo(fullPaths = true).}:
+    if not cond:
+      raise newGrpcFailure()
+
 func newStringRef*(s = ""): ref string =
   new result
   result[] = s

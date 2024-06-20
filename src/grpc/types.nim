@@ -1,6 +1,7 @@
 
 type StatusCode* = distinct uint8
 proc `==`*(a, b: StatusCode): bool {.borrow.}
+proc `$`*(a: StatusCode): string {.borrow.}
 const
   stcOk* = 0.StatusCode
   stcCancelled* = 1.StatusCode
