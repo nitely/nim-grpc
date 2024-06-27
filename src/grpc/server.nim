@@ -79,7 +79,7 @@ proc failSilently(fut: Future[void]) {.async.} =
 template with*(strm: GrpcStream, body: untyped): untyped =
   var failure = false
   try:
-    withStream strm.stream:
+    with strm.stream:
       block:
         body
       if not strm.stream.sendEnded:
@@ -148,7 +148,7 @@ proc processClient(
   client: ClientContext,
   routes: GrpcRoutes
 ) {.async.} =
-  withClient client:
+  with client:
     while client.isConnected:
       let strm = await client.recvStream()
       asyncCheck processStreamHandler(newGrpcStream(strm), routes)
@@ -163,7 +163,7 @@ proc processClientHandler(
     debugEcho err.msg
 
 proc serve*(server: ServerContext, routes: GrpcRoutes) {.async.} =
-  withServer server:
+  with server:
     while server.isConnected:
       let client = await server.recvClient()
       asyncCheck processClientHandler(client, routes)

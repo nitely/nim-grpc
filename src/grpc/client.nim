@@ -14,7 +14,7 @@ import ./utils
 export
   ClientContext,
   newClient,
-  withClient,
+  with,
   GrpcResponseError,
   `==`
 
@@ -101,7 +101,7 @@ template with*(strm: GrpcStream, body: untyped): untyped =
   var failure = false
   var sendFut, recvFut: Future[void]
   try:
-    withStream strm.stream:
+    with strm.stream:
       recvFut = strm.stream.recvHeaders(strm.headers)
       sendFut = strm.stream.sendHeaders(strm.path)
       block:

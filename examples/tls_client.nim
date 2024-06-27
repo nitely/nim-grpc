@@ -57,7 +57,7 @@ proc helloReply(strm: GrpcStream): Future[HelloReply] {.async.} =
 proc main() {.async.} =
   #var client = newClient("127.0.0.1", Port 50051)
   var client = newClient("127.0.0.1", Port 4443)
-  withClient client:
+  with client:
     block:
       echo "Simple request"
       let request = new HelloRequest
