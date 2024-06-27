@@ -99,6 +99,13 @@ type
   ViewCallback* = proc(strm: GrpcStream) {.async.}
   GrpcRoutes* = TableRef[string, ViewCallback]
 
+proc sendTrailers(strm: GrpcStream, status: StatusCode) {.async.} =
+  doAssert not strm.stream.sendEnded
+  await strm.stream.sendHeaders(
+    newSeqRef(@[("grpc-status", $status)]),
+    finish = true
+  )
+
 proc processStream(
   strm: GrpcStream, routes: GrpcRoutes
 ) {.async.} =
@@ -116,16 +123,15 @@ proc processStream(
     )
     let reqHeaders = toRequestHeaders data[]
     if reqHeaders.path notin routes:
-      await strm.stream.sendHeaders(
-        newSeqRef(@[("grpc-status", $stcNotFound)]),
-        finish = true
-      )
-    else:
+      # XXX send RST
+      await strm.sendTrailers(stcNotFound)
+      return
+    try:
       await routes[reqHeaders.path](strm)
-      await strm.stream.sendHeaders(
-        newSeqRef(@[("grpc-status", "0")]),
-        finish = true
-      )
+    except CatchableError:
+      await failSilently strm.sendTrailers(stcInternal)
+      raise
+    await strm.sendTrailers(stcOk)
 
 proc processStreamHandler(
   strm: GrpcStream,
