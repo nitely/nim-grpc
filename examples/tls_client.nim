@@ -2,13 +2,11 @@
 
 import std/asyncdispatch
 
-import pkg/protobuf_serialization
-import pkg/protobuf_serialization/proto_parser
-
 import ../src/grpc/client
 import ../src/grpc/utils
+import ../src/grpc/protobuf
 
-import_proto3("hello.proto")
+importProto3("hello.proto")
 
 proc sayHello(
   client: ClientContext, request: HelloRequest
