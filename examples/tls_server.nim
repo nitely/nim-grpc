@@ -15,13 +15,25 @@ const keyFile = getEnv "HYPERX_TEST_KEYFILE"
 
 importProto3("hello.proto")
 
+# sayHello(request: HelloRequest): HelloReply
+# sayHelloStreamIn(strmIn: HelloRequestStream): HelloReply
+# sayHelloStreamOut(request: HelloRequest, strmOut: HelloReplyStream)
+# sayHelloStreamInOut(strmIn: HelloRequestStream, strmOut: HelloReplyStream)
+
+# XXX return Optional[T], may recv nothing if stream ends
+proc recvMessage[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
+  let msg = newStringRef()
+  await strm.recvMessage(msg)
+  result = msg.pbDecode(T)
+
+proc sendMessage[T](strm: GrpcStream, msg: T) {.async.} =
+  await strm.sendMessage(msg.pbEncode())
+
 proc sayHello(strm: GrpcStream) {.async.} =
-  let data = newStringRef()
-  while not strm.recvEnded:  # XXX remove
-    await strm.recvBody(data)
-  let request = data.pbDecode(HelloRequest)
-  let reply = HelloReply(message: "Hello, " & request.name)
-  await strm.sendBody(reply.pbEncode(), finish = false)
+  let request = await strm.recvMessage(HelloRequest)
+  await strm.sendMessage(
+    HelloReply(message: "Hello, " & request.name)
+  )
 
 when isMainModule:
   proc main() {.async.} =

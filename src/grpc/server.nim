@@ -54,7 +54,7 @@ func hasFullRecord(data: string): bool =
     return false
   result = data.len >= data.recordSize
 
-proc recvBody*(strm: GrpcStream, data: ref string) {.async.} =
+proc recvMessage*(strm: GrpcStream, data: ref string) {.async.} =
   while not strm.stream.recvEnded and not strm.buff[].hasFullRecord:
     await strm.stream.recvBody(strm.buff)
   check strm.buff[].hasFullRecord or strm.buff[].len == 0
@@ -62,7 +62,7 @@ proc recvBody*(strm: GrpcStream, data: ref string) {.async.} =
   data[].add toOpenArray(strm.buff[], 0, L-1)
   strm.buff[].setSlice L .. strm.buff[].len-1
 
-proc sendBody*(
+proc sendMessage*(
   strm: GrpcStream,
   data: ref string,
   finish = false
@@ -84,10 +84,10 @@ template with*(strm: GrpcStream, body: untyped): untyped =
       block:
         body
       if not strm.stream.sendEnded:
-        await strm.sendBody(newStringRef(), finish = true)
+        await strm.sendMessage(newStringRef(), finish = true)
       if not strm.recvEnded:
         let recvData = newStringRef()
-        await strm.recvBody(recvData)
+        await strm.recvMessage(recvData)
         check recvData[].len == 0
         check strm.recvEnded
   except HyperxError, GrpcFailure:
