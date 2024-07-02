@@ -75,6 +75,7 @@ proc failSilently(fut: Future[void]) {.async.} =
       await fut
   except HyperxError as err:
     debugEcho err.msg
+    debugEcho err.getStackTrace()
 
 template with*(strm: GrpcStream, body: untyped): untyped =
   var failure = false
@@ -90,7 +91,8 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         check recvData[].len == 0
         check strm.recvEnded
   except HyperxError, GrpcFailure:
-    #debugEcho err.msg
+    debugEcho getCurrentException().msg
+    debugEcho getCurrentException().getStackTrace()
     failure = true
   if failure:
     raise newGrpcFailure()
@@ -128,9 +130,9 @@ proc processStream(
       return
     try:
       await routes[reqHeaders.path](strm)
-    except CatchableError:
+    except CatchableError as err:
       await failSilently strm.sendTrailers(stcInternal)
-      raise
+      raise err
     await strm.sendTrailers(stcOk)
 
 proc processStreamHandler(
@@ -141,8 +143,10 @@ proc processStreamHandler(
     await processStream(strm, routes)
   except HyperxStrmError as err:
     debugEcho err.msg
+    debugEcho err.getStackTrace()
   except HyperxConnError as err:
     debugEcho err.msg
+    debugEcho err.getStackTrace()
 
 proc processClient(
   client: ClientContext,
@@ -161,6 +165,7 @@ proc processClientHandler(
     await processClient(client, routes)
   except HyperxConnError as err:
     debugEcho err.msg
+    debugEcho err.getStackTrace()
 
 proc serve*(server: ServerContext, routes: GrpcRoutes) {.async.} =
   with server:

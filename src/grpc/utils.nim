@@ -1,6 +1,7 @@
 
-import std/streams
 import std/strbasics
+
+import pkg/protobuf_serialization
 
 import ./errors
 
@@ -29,19 +30,18 @@ func toWireData*(msg: string): string =
   result[4] = (L and 8.ones).char
   result.add msg
 
-proc encode*[T](s: T): string =
-  var ss = newStringStream()
-  ss.write s
-  ss.setPosition 0
-  result = ss.readAll.toWireData
-
 func fromWireData*(data: string): string =
   doAssert data.len >= 5
   doAssert data[0] == 0.char  # XXX uncompress
   result = newStringOfCap(data.len-5)
   result.add toOpenArray(data, 5, data.len-1)
 
-proc decode*(s: string): StringStream =
-  result = newStringStream()
-  result.write fromWireData(s)
-  result.setPosition(0)
+proc pbEncode*[T](s: T): ref string =
+  let ee = Protobuf.encode(s)
+  var ss = newString(ee.len)
+  for i in 0 .. ee.len-1:
+    ss[i] = ee[i].char
+  result = newStringRef(ss.toWireData)
+
+proc pbDecode*[T](s: ref string, t: typedesc[T]): T =
+  Protobuf.decode(s[].fromWireData, t)
