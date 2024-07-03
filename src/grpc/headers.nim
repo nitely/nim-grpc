@@ -2,6 +2,7 @@ import std/strutils
 import ./types
 
 iterator headersIt(s: string): (Slice[int], Slice[int]) {.inline.} =
+  ## Ported from hyperx
   let L = s.len
   var na = 0
   var nb = 0

@@ -1,8 +1,7 @@
 
 import std/strbasics
 
-import pkg/protobuf_serialization
-
+import ./protobuf
 import ./errors
 
 template check*(cond: untyped): untyped =

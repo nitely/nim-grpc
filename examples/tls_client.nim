@@ -4,42 +4,23 @@ import std/asyncdispatch
 
 import ../src/grpc/client
 import ../src/grpc/utils
-import ../src/grpc/protobuf
 
 importProto3("hello.proto")
 
-proc sayHello(
-  client: ClientContext, request: HelloRequest
-): Future[HelloReply] {.async.} =
-  let data = await client.get(
-    newStringRef("/helloworld.Greeter/SayHello"),
-    request.pbEncode()
+proc sayHello(client: ClientContext): GrpcStream =
+  client.newGrpcStream(
+    "/helloworld.Greeter/SayHello"
   )
-  result = data.pbDecode(HelloReply)
 
 proc sayHelloStreamReply(client: ClientContext): GrpcStream =
   client.newGrpcStream(
-    newStringRef("/helloworld.Greeter/SayHelloStreamReply")
+    "/helloworld.Greeter/SayHelloStreamReply"
   )
 
 proc sayHelloBidiStream(client: ClientContext): GrpcStream =
   client.newGrpcStream(
-    newStringRef("/helloworld.Greeter/SayHelloBidiStream")
+    "/helloworld.Greeter/SayHelloBidiStream"
   )
-
-proc helloRequest(
-  strm: GrpcStream,
-  request: HelloRequest,
-  finish = false
-) {.async.} =
-  await strm.sendBody(
-    request.pbEncode(), finish
-  )
-
-proc helloReply(strm: GrpcStream): Future[HelloReply] {.async.} =
-  let data = newStringRef()
-  await strm.recvBody(data)
-  result = data.pbDecode(HelloReply)
 
 proc main() {.async.} =
   #var client = newClient("127.0.0.1", Port 50051)
@@ -47,9 +28,11 @@ proc main() {.async.} =
   with client:
     block:
       echo "Simple request"
-      let request = HelloRequest(name: "you")
-      let reply = await client.sayHello(request)
-      echo reply.message
+      let stream = client.sayHello()
+      with stream:
+        await stream.sendMessage(HelloRequest(name: "you"))
+        let reply = await stream.recvMessage(HelloReply)
+        echo reply.message
     when false:
       echo "Stream reply"
       let stream = client.sayHelloStreamReply()

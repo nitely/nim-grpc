@@ -1,81 +1,28 @@
-{.define: ssl.}
 
 from std/os import getEnv
 import std/asyncdispatch
 import std/tables
-import std/strbasics
 
-import pkg/protobuf
 import pkg/hyperx/server
 
+import ./clientserver
 import ./errors
 import ./types
 import ./headers
 import ./utils
+import ./protobuf
 
 export
-  ServerContext
+  ServerContext,
+  recvMessage,
+  sendMessage,
+  GrpcStream,
+  protobuf
 
 const localHost* = "127.0.0.1"
 const localPort* = Port 4443
 const certFile = getEnv "HYPERX_TEST_CERTFILE"
 const keyFile = getEnv "HYPERX_TEST_KEYFILE"
-
-type
-  GrpcStream* = ref object
-    stream: ClientStream
-    headers: ref string
-    buff: ref string
-
-proc newGrpcStream*(strm: ClientStream): GrpcStream =
-  GrpcStream(
-    stream: strm,
-    headers: newStringRef(),
-    buff: newStringRef()
-  )
-
-proc recvEnded*(strm: GrpcStream): bool =
-  result = strm.stream.recvEnded() and strm.buff[].len == 0
-
-func recordSize(data: string): int =
-  if data.len == 0:
-    return 0
-  doAssert data.len >= 5
-  var L = 0'u32
-  L += data[1].uint32 shl 24
-  L += data[2].uint32 shl 16
-  L += data[3].uint32 shl 8
-  L += data[4].uint32
-  # XXX check bit 31 is not set
-  result = L.int+5
-
-func hasFullRecord(data: string): bool =
-  if data.len < 5:
-    return false
-  result = data.len >= data.recordSize
-
-proc recvMessage*(strm: GrpcStream, data: ref string) {.async.} =
-  while not strm.stream.recvEnded and not strm.buff[].hasFullRecord:
-    await strm.stream.recvBody(strm.buff)
-  check strm.buff[].hasFullRecord or strm.buff[].len == 0
-  let L = strm.buff[].recordSize
-  data[].add toOpenArray(strm.buff[], 0, L-1)
-  strm.buff[].setSlice L .. strm.buff[].len-1
-
-proc sendMessage*(
-  strm: GrpcStream,
-  data: ref string,
-  finish = false
-) {.async.} =
-  await strm.stream.sendBody(data, finish)
-
-proc failSilently(fut: Future[void]) {.async.} =
-  try:
-    if fut != nil:
-      await fut
-  except HyperxError as err:
-    debugEcho err.msg
-    debugEcho err.getStackTrace()
 
 template with*(strm: GrpcStream, body: untyped): untyped =
   var failure = false
@@ -87,9 +34,10 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         await strm.sendMessage(newStringRef(), finish = true)
       if not strm.recvEnded:
         let recvData = newStringRef()
-        await strm.recvMessage(recvData)
+        let recved = await strm.recvMessage(recvData)
         check recvData[].len == 0
         check strm.recvEnded
+        check not recved
   except HyperxError, GrpcFailure:
     debugEcho getCurrentException().msg
     debugEcho getCurrentException().getStackTrace()
