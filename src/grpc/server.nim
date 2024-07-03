@@ -1,5 +1,4 @@
 
-from std/os import getEnv
 import std/asyncdispatch
 import std/tables
 
@@ -14,15 +13,11 @@ import ./protobuf
 
 export
   ServerContext,
+  newServer,
   recvMessage,
   sendMessage,
   GrpcStream,
   protobuf
-
-const localHost* = "127.0.0.1"
-const localPort* = Port 4443
-const certFile = getEnv "HYPERX_TEST_CERTFILE"
-const keyFile = getEnv "HYPERX_TEST_KEYFILE"
 
 template with*(strm: GrpcStream, body: untyped): untyped =
   var failure = false
@@ -120,8 +115,3 @@ proc serve*(server: ServerContext, routes: GrpcRoutes) {.async.} =
     while server.isConnected:
       let client = await server.recvClient()
       asyncCheck processClientHandler(client, routes)
-
-proc newServer*(): ServerContext =
-  newServer(
-    localHost, localPort, certFile, keyFile
-  )

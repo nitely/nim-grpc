@@ -37,7 +37,7 @@ enum PayloadType {
 // A block of data, to simply increase gRPC message size.
 message Payload {
   // The type of data in body.
-  PayloadType type = 1;
+  int32 type = 1;
   // Primary contents of payload.
   bytes body = 2;
 }
@@ -68,7 +68,7 @@ enum GrpclbRouteType {
 message SimpleRequest {
   // Desired payload type in the response from the server.
   // If response_type is RANDOM, server randomly chooses one from other formats.
-  PayloadType response_type = 1;
+  int32 response_type = 1;
 
   // Desired payload size in the response from the server.
   int32 response_size = 2;
@@ -101,7 +101,7 @@ message SimpleRequest {
   bool fill_grpclb_route_type = 10;
 
   // If set the server should record this metrics report data for the current RPC.
-  TestOrcaReport orca_per_query_report = 11;
+  //TestOrcaReport orca_per_query_report = 11;
 }
 
 // Unary response, as configured by the request.
@@ -118,7 +118,7 @@ message SimpleResponse {
   // but the same across all RPC's made to a particular server instance.
   string server_id = 4;
   // gRPCLB Path.
-  GrpclbRouteType grpclb_route_type = 5;
+  int32 grpclb_route_type = 5;
 
   // Server hostname.
   string hostname = 6;
@@ -166,7 +166,7 @@ message StreamingOutputCallRequest {
   // If response_type is RANDOM, the payload from each response in the stream
   // might be of different types. This is to simulate a mixed type of payload
   // stream.
-  PayloadType response_type = 1;
+  int32 response_type = 1;
 
   // Configuration for each expected response message.
   repeated ResponseParameters response_parameters = 2;

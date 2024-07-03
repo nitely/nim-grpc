@@ -1,5 +1,5 @@
 config.nims
 examples/tls_client
 examples/tls_server
-tests/grpc
-tests/grpc.nim.*
+tests/interop/testserver
+tests/interop/testclient

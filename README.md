@@ -13,7 +13,7 @@ It works on top of [hyperx](https://github.com/nitely/nim-hyperx).
 ## ToDo
 
 - [x] Client
-- [ ] Server
+- [x] Server
 - [ ] Code gen proto Service
 - [ ] Compression
 - [ ] JSON
