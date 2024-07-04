@@ -138,11 +138,14 @@ testAsync "client_streaming":
       "/grpc.testing.TestService/StreamingInputCall"
     )
     with stream:
-      for psize in [27182, 8, 1828, 45904]:
-        await stream.sendMessage(StreamingInputCallRequest(
-          payload: Payload(body: newSeq[byte](psize))
-        ))
-      await stream.sendEnd()
+      let psizes = [27182, 8, 1828, 45904]
+      for i, psize in pairs psizes:
+        await stream.sendMessage(
+          StreamingInputCallRequest(
+            payload: Payload(body: newSeq[byte](psize))
+          ),
+          finish = i == psizes.len-1
+        )
       let reply = await stream.recvMessage(StreamingInputCallResponse)
       doAssert reply.aggregatedPayloadSize == 74922
       checked = true

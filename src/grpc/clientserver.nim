@@ -62,6 +62,7 @@ proc sendMessage*(
   data: ref string,
   finish = false
 ) {.async.} =
+  doAssert not strm.stream.sendEnded
   await strm.stream.sendBody(data, finish)
 
 proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
@@ -79,8 +80,10 @@ template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =
   except GrpcNoMessageException:
     doAssert strm.recvEnded
 
-proc sendMessage*[T](strm: GrpcStream, msg: T, compress = false) {.async.} =
-  await strm.sendMessage(msg.pbEncode(compress))
+proc sendMessage*[T](
+  strm: GrpcStream, msg: T, finish = false, compress = false
+) {.async.} =
+  await strm.sendMessage(msg.pbEncode(compress), finish = finish)
 
 proc sendEnd*(strm: GrpcStream) {.async.} =
   doAssert not strm.stream.sendEnded
