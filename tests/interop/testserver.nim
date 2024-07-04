@@ -19,21 +19,24 @@ importProto3("empty.proto")
 importProto3("messages.proto")
 
 proc emptyCall(strm: GrpcStream) {.async.} =
-  let request = await strm.recvMessage(Empty)
+  discard await strm.recvMessage(Empty)
   await strm.sendMessage(Empty())
 
 proc unaryCall(strm: GrpcStream) {.async.} =
   let request = await strm.recvMessage(SimpleRequest)
-  await strm.sendMessage(SimpleResponse(
-    payload: Payload(body: newSeq[byte](request.responseSize))
-  ))
+  await strm.sendMessage(
+    SimpleResponse(
+      payload: Payload(body: newSeq[byte](request.responseSize))
+    ),
+    compress = request.responseCompressed.value
+  )
 
 proc main() {.async.} =
   echo "Serving forever"
   let server = newServer(localHost, localPort, certFile, keyFile)
   await server.serve({
-    "/grpc.testing.TestService/EmptyCall": emptyCall.ViewCallback,
-    "/grpc.testing.TestService/UnaryCall": unaryCall.ViewCallback,
+    "/grpc.testing.TestService/EmptyCall": emptyCall.GrpcCallback,
+    "/grpc.testing.TestService/UnaryCall": unaryCall.GrpcCallback,
   }.newtable)
 
 waitFor main()

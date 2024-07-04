@@ -72,8 +72,8 @@ proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
   check recved  # XXX raise GrpcNoMessageError
   result = msg.pbDecode(T)
 
-proc sendMessage*[T](strm: GrpcStream, msg: T) {.async.} =
-  await strm.sendMessage(msg.pbEncode())
+proc sendMessage*[T](strm: GrpcStream, msg: T, compress = false) {.async.} =
+  await strm.sendMessage(msg.pbEncode(compress))
 
 proc failSilently*(fut: Future[void]) {.async.} =
   try:

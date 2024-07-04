@@ -41,8 +41,8 @@ template with*(strm: GrpcStream, body: untyped): untyped =
     raise newGrpcFailure()
 
 type
-  ViewCallback* = proc(strm: GrpcStream) {.async.}
-  GrpcRoutes* = TableRef[string, ViewCallback]
+  GrpcCallback* = proc(strm: GrpcStream) {.async.}
+  GrpcRoutes* = TableRef[string, GrpcCallback]
 
 proc sendTrailers(strm: GrpcStream, status: StatusCode) {.async.} =
   doAssert not strm.stream.sendEnded
@@ -60,8 +60,8 @@ proc processStream(
     await strm.stream.sendHeaders(
       newSeqRef(@[
         (":status", "200"),
-        ("grpc-encoding", "identity"),
-        ("grpc-accept-encoding", "identity"),
+        ("grpc-encoding", "gzip"),  # XXX conf for identity
+        ("grpc-accept-encoding", "identity, gzip, deflate"),
         ("content-type", "application/grpc+proto")
       ]),
       finish = false

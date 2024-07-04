@@ -25,7 +25,7 @@ when isMainModule:
     echo "Serving forever"
     let server = newServer(localHost, localPort, certFile, keyFile)
     await server.serve({
-      "/helloworld.Greeter/SayHello": sayHello.ViewCallback
+      "/helloworld.Greeter/SayHello": sayHello.GrpcCallback
     }.newtable)
   waitFor main()
   echo "ok"

@@ -10,6 +10,7 @@ skipDirs = @["tests", "examples"]
 requires "nim >= 2.0.0"
 requires "hyperx >= 0.1.15"
 requires "protobuf_serialization >= 0.3.0"
+requires "zippy >= 0.10.14"
 
 #task test, "Test":
 #  exec "nim c -r src/grpc.nim"

@@ -32,8 +32,8 @@ proc sendHeaders(
     (":path", path[]),
     (":authority", strm.client.hostname),
     ("te", "trailers"),
-    ("grpc-encoding", "identity"),
-    ("grpc-accept-encoding", "identity"),
+    ("grpc-encoding", "gzip"),  # XXX conf for identity
+    ("grpc-accept-encoding", "identity, gzip, deflate"),
     ("user-agent", "grpc-nim/0.1.0"),
     ("content-type", "application/grpc+proto")
   ]
