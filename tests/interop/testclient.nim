@@ -7,7 +7,6 @@
 {.define: ssl.}
 
 import std/asyncdispatch
-import std/tables
 
 import ../../src/grpc/client
 import ./pbtypes

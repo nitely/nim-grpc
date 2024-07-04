@@ -1,5 +1,4 @@
 
-import std/tables
 import ../../src/grpc/protobuf
 
 importProto3("empty.proto")
