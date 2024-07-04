@@ -4,8 +4,7 @@ import std/asyncdispatch
 
 import ../src/grpc/client
 import ../src/grpc/utils
-
-importProto3("hello.proto")
+import ./pbtypes
 
 proc sayHello(client: ClientContext): GrpcStream =
   client.newGrpcStream(

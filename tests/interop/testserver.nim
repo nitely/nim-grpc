@@ -9,14 +9,12 @@ import std/tables
 
 import ../../src/grpc/server
 import ../../src/grpc/utils
+import ./pbtypes
 
 const localHost = "127.0.0.1"
 const localPort = Port 4443
 const certFile = getEnv "HYPERX_TEST_CERTFILE"
 const keyFile = getEnv "HYPERX_TEST_KEYFILE"
-
-importProto3("empty.proto")
-importProto3("messages.proto")
 
 proc emptyCall(strm: GrpcStream) {.async.} =
   discard await strm.recvMessage(Empty)

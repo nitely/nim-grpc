@@ -10,9 +10,7 @@ import std/asyncdispatch
 import std/tables
 
 import ../../src/grpc/client
-
-importProto3("empty.proto")
-importProto3("messages.proto")
+import ./pbtypes
 
 template testAsync(name: string, body: untyped): untyped =
   (proc () = 
@@ -123,7 +121,7 @@ testAsync "server_compressed_unary":
     )
     with stream2:
       await stream2.sendMessage(SimpleRequest(
-        responseCompressed: BoolValue(value: true),
+        responseCompressed: BoolValue(value: false),
         responseSize: 314159,
         payload: Payload(body: newSeq[byte](271828))
       ))
