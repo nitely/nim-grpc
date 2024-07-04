@@ -19,6 +19,8 @@ export
   `==`,
   recvMessage,
   sendMessage,
+  sendEnd,
+  whileRecvMessages,
   GrpcStream,
   newGrpcStream,
   protobuf

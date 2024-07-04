@@ -129,3 +129,21 @@ testAsync "server_compressed_unary":
       checked2 = true
   doAssert checked
   doAssert checked2
+
+testAsync "client_streaming":
+  var checked = false
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(
+      "/grpc.testing.TestService/StreamingInputCall"
+    )
+    with stream:
+      for psize in [27182, 8, 1828, 45904]:
+        await stream.sendMessage(StreamingInputCallRequest(
+          payload: Payload(body: newSeq[byte](psize))
+        ))
+      await stream.sendEnd()
+      let reply = await stream.recvMessage(StreamingInputCallResponse)
+      doAssert reply.aggregatedPayloadSize == 74922
+      checked = true
+  doAssert checked

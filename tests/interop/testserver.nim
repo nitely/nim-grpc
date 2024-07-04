@@ -29,12 +29,22 @@ proc unaryCall(strm: GrpcStream) {.async.} =
     compress = request.responseCompressed.value
   )
 
+proc streamingInputCall(strm: GrpcStream) {.async.} =
+  var size = 0
+  whileRecvMessages strm:
+    let request = await strm.recvMessage(StreamingInputCallRequest)
+    size += request.payload.body.len
+  await strm.sendMessage(StreamingInputCallResponse(
+    aggregatedPayloadSize: size.int32
+  ))
+
 proc main() {.async.} =
   echo "Serving forever"
   let server = newServer(localHost, localPort, certFile, keyFile)
   await server.serve({
     "/grpc.testing.TestService/EmptyCall": emptyCall.GrpcCallback,
     "/grpc.testing.TestService/UnaryCall": unaryCall.GrpcCallback,
+    "/grpc.testing.TestService/StreamingInputCall": streamingInputCall.GrpcCallback,
   }.newtable)
 
 waitFor main()

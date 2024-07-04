@@ -19,6 +19,11 @@ template check*(cond: untyped): untyped =
     if not cond:
       raise newGrpcFailure()
 
+template check*(cond, err: untyped): untyped =
+  {.line: instantiationInfo(fullPaths = true).}:
+    if not cond:
+      raise err
+
 func newStringRef*(s = ""): ref string =
   new result
   result[] = s

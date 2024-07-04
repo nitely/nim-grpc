@@ -69,11 +69,22 @@ proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
   ## This is common to end the stream.
   let msg = newStringRef()
   let recved = await strm.recvMessage(msg)
-  check recved  # XXX raise GrpcNoMessageError
+  check recved, newGrpcNoMessageException()
   result = msg.pbDecode(T)
+
+template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =
+  try:
+    while not strm.recvEnded:
+      body
+  except GrpcNoMessageException:
+    doAssert strm.recvEnded
 
 proc sendMessage*[T](strm: GrpcStream, msg: T, compress = false) {.async.} =
   await strm.sendMessage(msg.pbEncode(compress))
+
+proc sendEnd*(strm: GrpcStream) {.async.} =
+  doAssert not strm.stream.sendEnded
+  await strm.sendMessage(newStringRef(), finish = true)
 
 proc failSilently*(fut: Future[void]) {.async.} =
   try:

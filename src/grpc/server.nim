@@ -16,6 +16,8 @@ export
   newServer,
   recvMessage,
   sendMessage,
+  sendEnd,
+  whileRecvMessages,
   GrpcStream,
   protobuf
 
