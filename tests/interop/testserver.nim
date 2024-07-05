@@ -36,11 +36,20 @@ proc unaryCall(strm: GrpcStream) {.async.} =
 proc streamingInputCall(strm: GrpcStream) {.async.} =
   var size = 0
   whileRecvMessages strm:
-    let request = await strm.recvMessage(StreamingInputCallRequest)
+    let (compressed, request) = await strm.recvMessage2(StreamingInputCallRequest)
+    check compressed == request.expectCompressed.value,
+      newGrpcFailure(stcInvalidArg)
     size += request.payload.body.len
   await strm.sendMessage(StreamingInputCallResponse(
     aggregatedPayloadSize: size.int32
   ))
+
+proc streamingOutputCall(strm: GrpcStream) {.async.} =
+  let request = await strm.recvMessage(StreamingOutputCallRequest)
+  for rp in request.responseParameters:
+    await strm.sendMessage(StreamingOutputCallResponse(
+      payload: Payload(body: newSeq[byte](rp.size))
+    ))
 
 proc main() {.async.} =
   echo "Serving forever"
@@ -49,6 +58,7 @@ proc main() {.async.} =
     "/grpc.testing.TestService/EmptyCall": emptyCall.GrpcCallback,
     "/grpc.testing.TestService/UnaryCall": unaryCall.GrpcCallback,
     "/grpc.testing.TestService/StreamingInputCall": streamingInputCall.GrpcCallback,
+    "/grpc.testing.TestService/StreamingOutputCall": streamingOutputCall.GrpcCallback,
   }.newtable)
 
 waitFor main()

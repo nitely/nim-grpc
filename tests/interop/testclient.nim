@@ -139,13 +139,13 @@ testAsync "server_compressed_unary":
         inc checked
   doAssert checked == 2
 
+const streamingInputCallPath = "/grpc.testing.TestService/StreamingInputCall"
+
 testAsync "client_streaming":
   var checked = false
   var client = newClient(localHost, localPort)
   with client:
-    let stream = client.newGrpcStream(
-      "/grpc.testing.TestService/StreamingInputCall"
-    )
+    let stream = client.newGrpcStream(streamingInputCallPath)
     with stream:
       let psizes = [27182, 8, 1828, 45904]
       for i, psize in pairs psizes:
@@ -159,3 +159,68 @@ testAsync "client_streaming":
       doAssert reply.aggregatedPayloadSize == 74922
       checked = true
   doAssert checked
+
+testAsync "client_compressed_streaming":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    try:
+      let stream = client.newGrpcStream(streamingInputCallPath)
+      with stream:
+        await stream.sendMessage(
+          StreamingInputCallRequest(
+            expectCompressed: BoolValue(value: true),
+            payload: Payload(body: newSeq[byte](27182))
+          ),
+          finish = true
+        )
+        discard await stream.recvMessage(StreamingInputCallResponse)
+        doAssert false
+    except GrpcResponseError as err:
+      doAssert err.code == stcInvalidArg
+      inc checked
+    block:
+      let stream = client.newGrpcStream(streamingInputCallPath)
+      with stream:
+        await stream.sendMessage(
+          StreamingInputCallRequest(
+            expectCompressed: BoolValue(value: true),
+            payload: Payload(body: newSeq[byte](27182))
+          ),
+          compress = true
+        )
+        await stream.sendMessage(
+          StreamingInputCallRequest(
+            expectCompressed: BoolValue(value: false),
+            payload: Payload(body: newSeq[byte](45904))
+          ),
+          finish = true
+        )
+        let reply = await stream.recvMessage(StreamingInputCallResponse)
+        doAssert reply.aggregatedPayloadSize == 73086
+        inc checked
+  doAssert checked == 2
+
+const streamingOutputCall = "/grpc.testing.TestService/StreamingOutputCall"
+
+testAsync "server_streaming":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(streamingOutputCall)
+    with stream:
+      await stream.sendMessage(StreamingOutputCallRequest(
+        responseParameters: @[
+          ResponseParameters(size: 31415),
+          ResponseParameters(size: 9),
+          ResponseParameters(size: 2653),
+          ResponseParameters(size: 58979),
+        ]
+      ))
+      var sizes = newSeq[int]()
+      whileRecvMessages stream:
+        let request = await stream.recvMessage(StreamingOutputCallResponse)
+        sizes.add request.payload.body.len
+      doAssert sizes == @[31415, 9, 2653, 58979]
+      inc checked
+  doAssert checked == 1
