@@ -104,8 +104,8 @@ proc processClientHandler(
   try:
     await processClient(client, routes)
   except HyperxConnError as err:
-    debugEcho err.msg
     debugEcho err.getStackTrace()
+    debugEcho err.msg
 
 proc serve*(server: ServerContext, routes: GrpcRoutes) {.async.} =
   with server:
