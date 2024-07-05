@@ -1,5 +1,5 @@
 import std/strutils
-import ./types
+import ./statuscodes
 
 iterator headersIt(s: string): (Slice[int], Slice[int]) {.inline.} =
   ## Ported from hyperx

@@ -1,4 +1,3 @@
-
 import std/asyncdispatch
 import std/tables
 
@@ -6,7 +5,6 @@ import pkg/hyperx/server
 
 import ./clientserver
 import ./errors
-import ./types
 import ./headers
 import ./utils
 import ./protobuf
@@ -22,7 +20,6 @@ export
   protobuf
 
 template with*(strm: GrpcStream, body: untyped): untyped =
-  var failure = false
   try:
     with strm.stream:
       block:
@@ -35,11 +32,9 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         check recvData[].len == 0
         check strm.recvEnded
         check not recved
-  except HyperxError, GrpcFailure:
+  except HyperxError:
     debugEcho getCurrentException().msg
     debugEcho getCurrentException().getStackTrace()
-    failure = true
-  if failure:
     raise newGrpcFailure()
 
 type
@@ -63,7 +58,7 @@ proc processStream(
       newSeqRef(@[
         (":status", "200"),
         ("grpc-encoding", "gzip"),  # XXX conf for identity
-        ("grpc-accept-encoding", "identity, gzip, deflate"),
+        #("grpc-accept-encoding", "identity, gzip, deflate"),
         ("content-type", "application/grpc+proto")
       ]),
       finish = false
@@ -75,6 +70,9 @@ proc processStream(
       return
     try:
       await routes[reqHeaders.path](strm)
+    except GrpcFailure as err:
+      await failSilently strm.sendTrailers(err.code)
+      raise err
     except CatchableError as err:
       await failSilently strm.sendTrailers(stcInternal)
       raise err
@@ -86,12 +84,9 @@ proc processStreamHandler(
 ) {.async.} =
   try:
     await processStream(strm, routes)
-  except HyperxStrmError as err:
-    debugEcho err.msg
-    debugEcho err.getStackTrace()
-  except HyperxConnError as err:
-    debugEcho err.msg
-    debugEcho err.getStackTrace()
+  except HyperxStrmError, HyperxConnError, GrpcFailure:
+    debugEcho getCurrentException().getStackTrace()
+    debugEcho getCurrentException().msg
 
 proc processClient(
   client: ClientContext,

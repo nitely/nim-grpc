@@ -7,8 +7,10 @@ from std/os import getEnv
 import std/asyncdispatch
 import std/tables
 
+from ../../src/grpc/clientserver import recvMessage2
 import ../../src/grpc/server
 import ../../src/grpc/utils
+import ../../src/grpc/errors
 import ./pbtypes
 
 const localHost = "127.0.0.1"
@@ -21,7 +23,9 @@ proc emptyCall(strm: GrpcStream) {.async.} =
   await strm.sendMessage(Empty())
 
 proc unaryCall(strm: GrpcStream) {.async.} =
-  let request = await strm.recvMessage(SimpleRequest)
+  let (compressed, request) = await strm.recvMessage2(SimpleRequest)
+  check compressed == request.expectCompressed.value,
+    newGrpcFailure(stcInvalidArg)
   await strm.sendMessage(
     SimpleResponse(
       payload: Payload(body: newSeq[byte](request.responseSize))

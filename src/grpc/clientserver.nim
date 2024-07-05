@@ -73,6 +73,14 @@ proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
   check recved, newGrpcNoMessageException()
   result = msg.pbDecode(T)
 
+proc recvMessage2*[T](strm: GrpcStream, t: typedesc[T]): Future[(bool, T)] {.async.} =
+  ## Return true if message was compressed, otherwise return false.
+  let msg = newStringRef()
+  let recved = await strm.recvMessage(msg)
+  check recved, newGrpcNoMessageException()
+  result[0] = bool(msg[][0])
+  result[1] = msg.pbDecode(T)
+
 template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =
   try:
     while not strm.recvEnded:

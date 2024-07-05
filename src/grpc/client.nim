@@ -1,4 +1,3 @@
-
 import std/asyncdispatch
 import std/strbasics
 
@@ -7,7 +6,6 @@ import pkg/hyperx/client
 import ./clientserver
 import ./errors
 import ./headers
-import ./types
 import ./utils
 import ./protobuf
 

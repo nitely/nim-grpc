@@ -8,7 +8,9 @@
 
 import std/asyncdispatch
 
+from ../../src/grpc/clientserver import recvMessage2
 import ../../src/grpc/client
+import ../../src/grpc/errors
 import ./pbtypes
 
 template testAsync(name: string, body: untyped): untyped =
@@ -39,13 +41,13 @@ testAsync "empty_unary":
       checked = true
   doAssert checked
 
+const unaryCallPath = "/grpc.testing.TestService/UnaryCall"
+
 testAsync "large_unary":
   var checked = false
   var client = newClient(localHost, localPort)
   with client:
-    let stream = client.newGrpcStream(
-      "/grpc.testing.TestService/UnaryCall"
-    )
+    let stream = client.newGrpcStream(unaryCallPath)
     with stream:
       await stream.sendMessage(SimpleRequest(
         responseSize: 314159,
@@ -57,78 +59,85 @@ testAsync "large_unary":
   doAssert checked
 
 testAsync "client_compressed_unary":
-  # there is no access to the message bit flag,
-  # so this verifies nothing.
-  var checked = false
-  var checked2 = false
+  var checked = 0
   var client = newClient(localHost, localPort)
   with client:
-    let stream = client.newGrpcStream(
-      "/grpc.testing.TestService/UnaryCall"
-    )
-    with stream:
-      await stream.sendMessage(
-        SimpleRequest(
-          expectCompressed: BoolValue(value: false),
-          responseSize: 314159,
-          payload: Payload(body: newSeq[byte](271828))
-        ),
-        compress = false
-      )
-      let reply = await stream.recvMessage(SimpleResponse)
-      doAssert reply.payload.body.len == 314159
-      checked = true
-    let stream2 = client.newGrpcStream(
-      "/grpc.testing.TestService/UnaryCall"
-    )
-    with stream2:
-      await stream2.sendMessage(
-        SimpleRequest(
-          expectCompressed: BoolValue(value: true),
-          responseSize: 314159,
-          payload: Payload(body: newSeq[byte](271828))
-        ),
-        compress = true
-      )
-      let reply = await stream2.recvMessage(SimpleResponse)
-      doAssert reply.payload.body.len == 314159
-      checked2 = true
-  doAssert checked
-  doAssert checked2
+    try:
+      let stream = client.newGrpcStream(unaryCallPath)
+      with stream:
+        await stream.sendMessage(
+          SimpleRequest(
+            expectCompressed: BoolValue(value: true),
+            responseSize: 314159,
+            payload: Payload(body: newSeq[byte](271828))
+          ),
+          compress = false
+        )
+        # XXX should raise GrpcResponseError here instead of w/e this raises
+        discard await stream.recvMessage(SimpleResponse)
+        doAssert false
+    except GrpcResponseError as err:
+      doAssert err.code == stcInvalidArg
+      inc checked
+    block:
+      let stream = client.newGrpcStream(unaryCallPath)
+      with stream:
+        await stream.sendMessage(
+          SimpleRequest(
+            expectCompressed: BoolValue(value: false),
+            responseSize: 314159,
+            payload: Payload(body: newSeq[byte](271828))
+          ),
+          compress = false
+        )
+        let reply = await stream.recvMessage(SimpleResponse)
+        doAssert reply.payload.body.len == 314159
+        inc checked
+    block:
+      let stream = client.newGrpcStream(unaryCallPath)
+      with stream:
+        await stream.sendMessage(
+          SimpleRequest(
+            expectCompressed: BoolValue(value: true),
+            responseSize: 314159,
+            payload: Payload(body: newSeq[byte](271828))
+          ),
+          compress = true
+        )
+        let reply = await stream.recvMessage(SimpleResponse)
+        doAssert reply.payload.body.len == 314159
+        inc checked
+  doAssert checked == 3
 
 testAsync "server_compressed_unary":
-  # there is no access to the message bit flag,
-  # so this verifies nothing.
-  var checked = false
-  var checked2 = false
+  var checked = 0
   var client = newClient(localHost, localPort)
   with client:
-    let stream = client.newGrpcStream(
-      "/grpc.testing.TestService/UnaryCall"
-    )
-    with stream:
-      await stream.sendMessage(SimpleRequest(
-        responseCompressed: BoolValue(value: true),
-        responseSize: 314159,
-        payload: Payload(body: newSeq[byte](271828))
-      ))
-      let reply = await stream.recvMessage(SimpleResponse)
-      doAssert reply.payload.body.len == 314159
-      checked = true
-    let stream2 = client.newGrpcStream(
-      "/grpc.testing.TestService/UnaryCall"
-    )
-    with stream2:
-      await stream2.sendMessage(SimpleRequest(
-        responseCompressed: BoolValue(value: false),
-        responseSize: 314159,
-        payload: Payload(body: newSeq[byte](271828))
-      ))
-      let reply = await stream2.recvMessage(SimpleResponse)
-      doAssert reply.payload.body.len == 314159
-      checked2 = true
-  doAssert checked
-  doAssert checked2
+    block:
+      let stream = client.newGrpcStream(unaryCallPath)
+      with stream:
+        await stream.sendMessage(SimpleRequest(
+          responseCompressed: BoolValue(value: true),
+          responseSize: 314159,
+          payload: Payload(body: newSeq[byte](271828))
+        ))
+        let (compressed, reply) = await stream.recvMessage2(SimpleResponse)
+        doAssert compressed
+        doAssert reply.payload.body.len == 314159
+        inc checked
+    block:
+      let stream = client.newGrpcStream(unaryCallPath)
+      with stream:
+        await stream.sendMessage(SimpleRequest(
+          responseCompressed: BoolValue(value: false),
+          responseSize: 314159,
+          payload: Payload(body: newSeq[byte](271828))
+        ))
+        let (compressed, reply) = await stream.recvMessage2(SimpleResponse)
+        doAssert not compressed
+        doAssert reply.payload.body.len == 314159
+        inc checked
+  doAssert checked == 2
 
 testAsync "client_streaming":
   var checked = false
