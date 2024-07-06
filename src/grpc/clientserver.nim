@@ -78,7 +78,7 @@ proc recvMessage2*[T](strm: GrpcStream, t: typedesc[T]): Future[(bool, T)] {.asy
   let msg = newStringRef()
   let recved = await strm.recvMessage(msg)
   check recved, newGrpcNoMessageException()
-  result[0] = bool(msg[][0])
+  result[0] = msg[][0] == 1.char
   result[1] = msg.pbDecode(T)
 
 template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =

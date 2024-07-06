@@ -47,9 +47,12 @@ proc streamingInputCall(strm: GrpcStream) {.async.} =
 proc streamingOutputCall(strm: GrpcStream) {.async.} =
   let request = await strm.recvMessage(StreamingOutputCallRequest)
   for rp in request.responseParameters:
-    await strm.sendMessage(StreamingOutputCallResponse(
-      payload: Payload(body: newSeq[byte](rp.size))
-    ))
+    await strm.sendMessage(
+      StreamingOutputCallResponse(
+        payload: Payload(body: newSeq[byte](rp.size))
+      ),
+      compress = rp.compressed.value
+    )
 
 proc main() {.async.} =
   echo "Serving forever"

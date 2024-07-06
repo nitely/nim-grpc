@@ -27,6 +27,8 @@ template testAsync(name: string, body: untyped): untyped =
 
 const localHost = "127.0.0.1"
 const localPort = Port 4443
+const boolTrue = BoolValue(value: true)
+const boolFalse = BoolValue(value: false)
 
 testAsync "empty_unary":
   var checked = false
@@ -67,7 +69,7 @@ testAsync "client_compressed_unary":
       with stream:
         await stream.sendMessage(
           SimpleRequest(
-            expectCompressed: BoolValue(value: true),
+            expectCompressed: boolTrue,
             responseSize: 314159,
             payload: Payload(body: newSeq[byte](271828))
           ),
@@ -84,7 +86,7 @@ testAsync "client_compressed_unary":
       with stream:
         await stream.sendMessage(
           SimpleRequest(
-            expectCompressed: BoolValue(value: false),
+            expectCompressed: boolFalse,
             responseSize: 314159,
             payload: Payload(body: newSeq[byte](271828))
           ),
@@ -98,7 +100,7 @@ testAsync "client_compressed_unary":
       with stream:
         await stream.sendMessage(
           SimpleRequest(
-            expectCompressed: BoolValue(value: true),
+            expectCompressed: boolTrue,
             responseSize: 314159,
             payload: Payload(body: newSeq[byte](271828))
           ),
@@ -117,7 +119,7 @@ testAsync "server_compressed_unary":
       let stream = client.newGrpcStream(unaryCallPath)
       with stream:
         await stream.sendMessage(SimpleRequest(
-          responseCompressed: BoolValue(value: true),
+          responseCompressed: boolTrue,
           responseSize: 314159,
           payload: Payload(body: newSeq[byte](271828))
         ))
@@ -129,7 +131,7 @@ testAsync "server_compressed_unary":
       let stream = client.newGrpcStream(unaryCallPath)
       with stream:
         await stream.sendMessage(SimpleRequest(
-          responseCompressed: BoolValue(value: false),
+          responseCompressed: boolFalse,
           responseSize: 314159,
           payload: Payload(body: newSeq[byte](271828))
         ))
@@ -169,7 +171,7 @@ testAsync "client_compressed_streaming":
       with stream:
         await stream.sendMessage(
           StreamingInputCallRequest(
-            expectCompressed: BoolValue(value: true),
+            expectCompressed: boolTrue,
             payload: Payload(body: newSeq[byte](27182))
           ),
           finish = true
@@ -184,14 +186,14 @@ testAsync "client_compressed_streaming":
       with stream:
         await stream.sendMessage(
           StreamingInputCallRequest(
-            expectCompressed: BoolValue(value: true),
+            expectCompressed: boolTrue,
             payload: Payload(body: newSeq[byte](27182))
           ),
           compress = true
         )
         await stream.sendMessage(
           StreamingInputCallRequest(
-            expectCompressed: BoolValue(value: false),
+            expectCompressed: boolFalse,
             payload: Payload(body: newSeq[byte](45904))
           ),
           finish = true
@@ -222,5 +224,29 @@ testAsync "server_streaming":
         let request = await stream.recvMessage(StreamingOutputCallResponse)
         sizes.add request.payload.body.len
       doAssert sizes == @[31415, 9, 2653, 58979]
+      inc checked
+  doAssert checked == 1
+
+testAsync "server_compressed_streaming":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(streamingOutputCall)
+    with stream:
+      await stream.sendMessage(StreamingOutputCallRequest(
+        responseParameters: @[
+          ResponseParameters(size: 31415, compressed: boolTrue),
+          ResponseParameters(size: 92653, compressed: boolFalse),
+        ]
+      ))
+      var sizes = newSeq[int]()
+      var compr = newSeq[bool]()
+      whileRecvMessages stream:
+        let (compressed, request) =
+          await stream.recvMessage2(StreamingOutputCallResponse)
+        sizes.add request.payload.body.len
+        compr.add compressed
+      doAssert sizes == @[31415, 92653]
+      doAssert compr == @[true, false]
       inc checked
   doAssert checked == 1
