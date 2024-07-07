@@ -250,3 +250,28 @@ testAsync "server_compressed_streaming":
       doAssert compr == @[true, false]
       inc checked
   doAssert checked == 1
+
+const fullDuplexCallPath = "/grpc.testing.TestService/FullDuplexCall"
+
+testAsync "ping_pong":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(fullDuplexCallPath)
+    with stream:
+      let rpsizes = [31415, 9, 2653, 58979]
+      let psizes = [27182, 8, 1828, 45904]
+      for i in 0 .. 3:
+        await stream.sendMessage(
+          StreamingOutputCallRequest(
+            responseParameters: @[
+              ResponseParameters(size: rpsizes[i].int32)
+            ],
+            payload: Payload(body: newSeq[byte](psizes[i]))
+          ),
+          finish = i == 3
+        )
+        let request = await stream.recvMessage(StreamingOutputCallResponse)
+        doAssert request.payload.body.len == rpsizes[i]
+        inc checked
+  doAssert checked == 4

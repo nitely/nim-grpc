@@ -54,6 +54,14 @@ proc streamingOutputCall(strm: GrpcStream) {.async.} =
       compress = rp.compressed.value
     )
 
+proc fullDuplexCall(strm: GrpcStream) {.async.} =
+  whileRecvMessages strm:
+    let request = await strm.recvMessage(StreamingOutputCallRequest)
+    for rp in request.responseParameters:
+      await strm.sendMessage(StreamingOutputCallResponse(
+        payload: Payload(body: newSeq[byte](rp.size))
+      ))
+
 proc main() {.async.} =
   echo "Serving forever"
   let server = newServer(localHost, localPort, certFile, keyFile)
@@ -62,6 +70,7 @@ proc main() {.async.} =
     "/grpc.testing.TestService/UnaryCall": unaryCall.GrpcCallback,
     "/grpc.testing.TestService/StreamingInputCall": streamingInputCall.GrpcCallback,
     "/grpc.testing.TestService/StreamingOutputCall": streamingOutputCall.GrpcCallback,
+    "/grpc.testing.TestService/FullDuplexCall": fullDuplexCall.GrpcCallback,
   }.newtable)
 
 waitFor main()
