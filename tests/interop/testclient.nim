@@ -275,3 +275,31 @@ testAsync "ping_pong":
         doAssert request.payload.body.len == rpsizes[i]
         inc checked
   doAssert checked == 4
+
+testAsync "empty_stream":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(fullDuplexCallPath)
+    with stream:
+      await stream.sendEnd()
+      whileRecvMessages stream:
+        discard await stream.recvMessage(StreamingOutputCallResponse)
+        doAssert false
+      inc checked
+  doAssert checked == 1
+
+#testAsync "custom_metadata":
+#  var checked = 0
+#  var client = newClient(localHost, localPort)
+#  with client:
+#    let stream = client.newGrpcStream(unaryCallPath)
+#    with stream:
+#      await stream.sendMessage(SimpleRequest(
+#        responseSize: 314159,
+#        payload: Payload(body: newSeq[byte](271828))
+#      ))
+#      let reply = await stream.recvMessage(SimpleResponse)
+#      doAssert reply.payload.body.len == 314159
+#      inc checked
+#  doAssert checked == 1

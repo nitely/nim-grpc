@@ -43,6 +43,8 @@ type
 
 proc sendTrailers(strm: GrpcStream, status: StatusCode) {.async.} =
   doAssert not strm.stream.sendEnded
+  if not strm.headersSent:
+    await strm.sendHeaders()
   await strm.stream.sendHeaders(
     newSeqRef(@[("grpc-status", $status)]),
     finish = true
@@ -52,18 +54,8 @@ proc processStream(
   strm: GrpcStream, routes: GrpcRoutes
 ) {.async.} =
   with strm:
-    let data = newStringRef()
-    await strm.stream.recvHeaders(data)
-    await strm.stream.sendHeaders(
-      newSeqRef(@[
-        (":status", "200"),
-        ("grpc-encoding", "gzip"),  # XXX conf for identity
-        #("grpc-accept-encoding", "identity, gzip, deflate"),
-        ("content-type", "application/grpc+proto")
-      ]),
-      finish = false
-    )
-    let reqHeaders = toRequestHeaders data[]
+    await strm.stream.recvHeaders(strm.headers)
+    let reqHeaders = toRequestHeaders strm.headers[]
     if reqHeaders.path notin routes:
       # XXX send RST
       await strm.sendTrailers(stcNotFound)

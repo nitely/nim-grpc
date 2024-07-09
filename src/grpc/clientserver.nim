@@ -7,22 +7,35 @@ import pkg/hyperx/client
 import ./errors
 import ./utils
 
+type Headers = ref seq[(string, string)]
+type GrpcTyp = enum
+  gtServer, gtClient
 type GrpcStream* = ref object
+  typ: GrpcTyp
   stream*: ClientStream
   path*: ref string
   headers*: ref string
+  headersSent*: bool  # XXX state
   buff: ref string
 
-proc newGrpcStream*(stream: ClientStream, path = ""): GrpcStream =
+proc newGrpcStream(
+  typ: GrpcTyp, stream: ClientStream, path = ""
+): GrpcStream =
   GrpcStream(
+    typ: typ,
     stream: stream,
     path: newStringRef(path),
     headers: newStringRef(),
     buff: newStringRef()
   )
 
+proc newGrpcStream*(stream: ClientStream): GrpcStream =
+  ## Server stream
+  newGrpcStream(gtServer, stream)
+
 proc newGrpcStream*(client: ClientContext, path: string): GrpcStream =
-  newGrpcStream(newClientStream(client), path)
+  ## Client stream
+  newGrpcStream(gtClient, newClientStream(client), path)
 
 proc recvEnded*(strm: GrpcStream): bool =
   result = strm.stream.recvEnded() and strm.buff[].len == 0
@@ -57,12 +70,42 @@ proc recvMessage*(
   strm.buff[].setSlice L .. strm.buff[].len-1
   result = L > 0
 
+func headersOut(strm: GrpcStream): Headers {.raises: [].} =
+  case strm.typ
+  of gtClient:
+    newSeqRef(@[
+      (":method", "POST"),
+      (":scheme", "https"),
+      (":path", strm.path[]),
+      (":authority", strm.stream.client.hostname),
+      ("te", "trailers"),
+      ("grpc-encoding", "gzip"),  # XXX conf for identity
+      ("grpc-accept-encoding", "identity, gzip, deflate"),
+      ("user-agent", "grpc-nim/0.1.0"),
+      ("content-type", "application/grpc+proto")
+    ])
+  of gtServer:
+    newSeqRef(@[
+      (":status", "200"),
+      ("grpc-encoding", "gzip"),  # XXX conf for identity
+      #("grpc-accept-encoding", "identity, gzip, deflate"),
+      ("content-type", "application/grpc+proto")
+    ])
+
+proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
+  doAssert not strm.headersSent
+  strm.headersSent = true
+  await strm.stream.sendHeaders(headers, finish = false)
+
+proc sendHeaders*(strm: GrpcStream) {.async.} =
+  await strm.sendHeaders(strm.headersOut)
+
 proc sendMessage*(
-  strm: GrpcStream,
-  data: ref string,
-  finish = false
+  strm: GrpcStream, data: ref string, finish = false
 ) {.async.} =
   doAssert not strm.stream.sendEnded
+  if not strm.headersSent:
+    await strm.sendHeaders()
   await strm.stream.sendBody(data, finish)
 
 proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =

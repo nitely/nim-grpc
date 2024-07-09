@@ -18,11 +18,28 @@ const localPort = Port 4443
 const certFile = getEnv "HYPERX_TEST_CERTFILE"
 const keyFile = getEnv "HYPERX_TEST_KEYFILE"
 
+#proc echoMetadataInitial(strm: GrpcStream) {.async.} =
+#  var headersOut = grpcHeaders
+#  for (hh, vv) in headersIt strm.headers:
+#    if toOpenArray(strm.headers, nn.a, nn.b) == "x-grpc-test-echo-initial":
+#      headersOut.add ("x-grpc-test-echo-initial", strm.headers[vv])
+#  if headersOut.len > grpcHeaders.len:
+#    await strm.sendHeaders(headersOut)
+#
+#proc echoMetadataTrailing(strm: GrpcStream) {.async.} =
+#  var headersOut = grpcTrailers
+#  for (hh, vv) in headersIt strm.headers:
+#    if toOpenArray(strm.headers, nn.a, nn.b) == "x-grpc-test-echo-trailing-bin":
+#      headersOut.add ("x-grpc-test-echo-trailing-bin", strm.headers[vv])
+#  if headersOut.len > grpcTrailers.len:
+#    await strm.sendTrailers(headersOut)
+
 proc emptyCall(strm: GrpcStream) {.async.} =
   discard await strm.recvMessage(Empty)
   await strm.sendMessage(Empty())
 
 proc unaryCall(strm: GrpcStream) {.async.} =
+#  await strm.echoMetadataInitial()
   let (compressed, request) = await strm.recvMessage2(SimpleRequest)
   check compressed == request.expectCompressed.value,
     newGrpcFailure(stcInvalidArg)
@@ -32,6 +49,7 @@ proc unaryCall(strm: GrpcStream) {.async.} =
     ),
     compress = request.responseCompressed.value
   )
+#  await strm.echoMetadataTrailing()
 
 proc streamingInputCall(strm: GrpcStream) {.async.} =
   var size = 0
@@ -55,12 +73,14 @@ proc streamingOutputCall(strm: GrpcStream) {.async.} =
     )
 
 proc fullDuplexCall(strm: GrpcStream) {.async.} =
+#  await strm.echoMetadataInitial()
   whileRecvMessages strm:
     let request = await strm.recvMessage(StreamingOutputCallRequest)
     for rp in request.responseParameters:
       await strm.sendMessage(StreamingOutputCallResponse(
         payload: Payload(body: newSeq[byte](rp.size))
       ))
+#  await strm.echoMetadataTrailing()
 
 proc main() {.async.} =
   echo "Serving forever"

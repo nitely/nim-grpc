@@ -23,34 +23,13 @@ export
   newGrpcStream,
   protobuf
 
-proc sendHeaders(
-  strm: ClientStream, path: ref string, contentLen = -1
-) {.async.} =
-  var headers = @[
-    (":method", "POST"),
-    (":scheme", "https"),
-    (":path", path[]),
-    (":authority", strm.client.hostname),
-    ("te", "trailers"),
-    ("grpc-encoding", "gzip"),  # XXX conf for identity
-    ("grpc-accept-encoding", "identity, gzip, deflate"),
-    ("user-agent", "grpc-nim/0.1.0"),
-    ("content-type", "application/grpc+proto")
-  ]
-  if contentLen > -1:
-    headers.add ("content-length", $contentLen)
-  await strm.sendHeaders(
-    newSeqRef(headers),
-    finish = false
-  )
-
 template with*(strm: GrpcStream, body: untyped): untyped =
   var failure = false
-  var sendFut, recvFut: Future[void]
+  var recvFut: Future[void]
   try:
     with strm.stream:
+      # XXX remove; recvHeaders on recvMessage
       recvFut = strm.stream.recvHeaders(strm.headers)
-      sendFut = strm.stream.sendHeaders(strm.path)
       block:
         body
       # XXX cancel stream if not recvEnded, and error out
@@ -68,7 +47,6 @@ template with*(strm: GrpcStream, body: untyped): untyped =
     failure = true
   finally:
     await failSilently(recvFut)
-    await failSilently(sendFut)
   strm.headers[].add strm.stream.recvTrailers
   #debugEcho strm.headers[]
   let respHeaders = toResponseHeaders strm.headers[]
