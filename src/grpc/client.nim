@@ -25,11 +25,8 @@ export
 
 template with*(strm: GrpcStream, body: untyped): untyped =
   var failure = false
-  var recvFut: Future[void]
   try:
     with strm.stream:
-      # XXX remove; recvHeaders on recvMessage
-      recvFut = strm.stream.recvHeaders(strm.headers)
       block:
         body
       # XXX cancel stream if not recvEnded, and error out
@@ -45,8 +42,6 @@ template with*(strm: GrpcStream, body: untyped): untyped =
   except HyperxError, GrpcFailure:
     #debugEcho err.msg
     failure = true
-  finally:
-    await failSilently(recvFut)
   strm.headers[].add strm.stream.recvTrailers
   #debugEcho strm.headers[]
   let respHeaders = toResponseHeaders strm.headers[]

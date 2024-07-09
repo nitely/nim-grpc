@@ -40,6 +40,10 @@ proc newGrpcStream*(client: ClientContext, path: string): GrpcStream =
 proc recvEnded*(strm: GrpcStream): bool =
   result = strm.stream.recvEnded() and strm.buff[].len == 0
 
+proc recvHeaders*(strm: GrpcStream) {.async.} =
+  doAssert strm.headers[].len == 0
+  await strm.stream.recvHeaders(strm.headers)
+
 func recordSize(data: string): int =
   if data.len == 0:
     return 0
@@ -62,6 +66,8 @@ proc recvMessage*(
 ): Future[bool] {.async.} =
   ## Adds a single record to data. It will add nothing
   ## if recv ends.
+  if strm.headers[].len == 0:
+    await strm.recvHeaders()
   while not strm.stream.recvEnded and not strm.buff[].hasFullRecord:
     await strm.stream.recvBody(strm.buff)
   check strm.buff[].hasFullRecord or strm.buff[].len == 0
