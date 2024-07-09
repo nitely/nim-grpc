@@ -17,6 +17,8 @@ export
   sendEnd,
   whileRecvMessages,
   GrpcStream,
+  headersOut,
+  sendHeaders,
   protobuf
 
 template with*(strm: GrpcStream, body: untyped): untyped =
@@ -41,14 +43,19 @@ type
   GrpcCallback* = proc(strm: GrpcStream) {.async.}
   GrpcRoutes* = TableRef[string, GrpcCallback]
 
-proc sendTrailers(strm: GrpcStream, status: StatusCode) {.async.} =
+func trailersOut*(strm: GrpcStream, status: StatusCode): Headers =
+  newSeqRef(@[("grpc-status", $status)])
+
+proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
   doAssert not strm.stream.sendEnded
+  doAssert not strm.trailersSent
+  strm.trailersSent = true
   if not strm.headersSent:
     await strm.sendHeaders()
-  await strm.stream.sendHeaders(
-    newSeqRef(@[("grpc-status", $status)]),
-    finish = true
-  )
+  await strm.stream.sendHeaders(headers, finish = true)
+
+proc sendTrailers(strm: GrpcStream, status: StatusCode) {.async.} =
+  await strm.sendTrailers(strm.trailersOut(status))
 
 proc processStream(
   strm: GrpcStream, routes: GrpcRoutes
@@ -63,12 +70,15 @@ proc processStream(
     try:
       await routes[reqHeaders.path](strm)
     except GrpcFailure as err:
-      await failSilently strm.sendTrailers(err.code)
+      if not strm.trailersSent:
+        await failSilently strm.sendTrailers(err.code)
       raise err
     except CatchableError as err:
-      await failSilently strm.sendTrailers(stcInternal)
+      if not strm.trailersSent:
+        await failSilently strm.sendTrailers(stcInternal)
       raise err
-    await strm.sendTrailers(stcOk)
+    if not strm.trailersSent:
+      await strm.sendTrailers(stcOk)
 
 proc processStreamHandler(
   strm: GrpcStream,

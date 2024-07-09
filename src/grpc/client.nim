@@ -21,6 +21,8 @@ export
   whileRecvMessages,
   GrpcStream,
   newGrpcStream,
+  headersOut,
+  sendHeaders,
   protobuf
 
 template with*(strm: GrpcStream, body: untyped): untyped =

@@ -7,7 +7,7 @@ import pkg/hyperx/client
 import ./errors
 import ./utils
 
-type Headers = ref seq[(string, string)]
+type Headers* = ref seq[(string, string)]
 type GrpcTyp = enum
   gtServer, gtClient
 type GrpcStream* = ref object
@@ -16,6 +16,7 @@ type GrpcStream* = ref object
   path*: ref string
   headers*: ref string
   headersSent*: bool  # XXX state
+  trailersSent*: bool  # XXX state
   buff: ref string
 
 proc newGrpcStream(
@@ -76,7 +77,7 @@ proc recvMessage*(
   strm.buff[].setSlice L .. strm.buff[].len-1
   result = L > 0
 
-func headersOut(strm: GrpcStream): Headers {.raises: [].} =
+func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
   case strm.typ
   of gtClient:
     newSeqRef(@[

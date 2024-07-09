@@ -6,6 +6,7 @@
 
 {.define: ssl.}
 
+from std/strutils import contains
 import std/asyncdispatch
 
 from ../../src/grpc/clientserver import recvMessage2
@@ -289,17 +290,34 @@ testAsync "empty_stream":
       inc checked
   doAssert checked == 1
 
-#testAsync "custom_metadata":
-#  var checked = 0
-#  var client = newClient(localHost, localPort)
-#  with client:
-#    let stream = client.newGrpcStream(unaryCallPath)
-#    with stream:
-#      await stream.sendMessage(SimpleRequest(
-#        responseSize: 314159,
-#        payload: Payload(body: newSeq[byte](271828))
-#      ))
-#      let reply = await stream.recvMessage(SimpleResponse)
-#      doAssert reply.payload.body.len == 314159
-#      inc checked
-#  doAssert checked == 1
+const xInitialKey = "x-grpc-test-echo-initial"
+const xInitialValue = "test_initial_metadata_value"
+const xTrailingKey = "x-grpc-test-echo-trailing-bin"
+const xTrailingValue = "0xababab"
+
+proc sendMetadata(strm: GrpcStream) {.async.} =
+  var headers = strm.headersOut
+  headers[].add (xInitialKey, xInitialValue)
+  headers[].add (xTrailingKey, xTrailingValue)
+  await strm.sendHeaders(headers)
+
+testAsync "custom_metadata":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(unaryCallPath)
+    with stream:
+      await stream.sendMetadata()
+      await stream.sendMessage(SimpleRequest(
+        responseSize: 314159,
+        payload: Payload(body: newSeq[byte](271828))
+      ))
+      let reply = await stream.recvMessage(SimpleResponse)
+      doAssert reply.payload.body.len == 314159
+      doAssert xInitialKey & ": " & xInitialValue in stream.headers[]
+      doAssert xTrailingKey notin stream.headers[]
+      inc checked
+    # XXX wait for trailers
+    doAssert xTrailingKey & ": " & xTrailingValue in stream.headers[]
+    inc checked
+  doAssert checked == 2

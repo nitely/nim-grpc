@@ -1,7 +1,7 @@
 import std/strutils
 import ./statuscodes
 
-iterator headersIt(s: string): (Slice[int], Slice[int]) {.inline.} =
+iterator headersIt*(s: string): (Slice[int], Slice[int]) {.inline.} =
   ## Ported from hyperx
   let L = s.len
   var na = 0
