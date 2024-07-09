@@ -272,8 +272,8 @@ testAsync "ping_pong":
           ),
           finish = i == 3
         )
-        let request = await stream.recvMessage(StreamingOutputCallResponse)
-        doAssert request.payload.body.len == rpsizes[i]
+        let reply = await stream.recvMessage(StreamingOutputCallResponse)
+        doAssert reply.payload.body.len == rpsizes[i]
         inc checked
   doAssert checked == 4
 
@@ -305,19 +305,41 @@ testAsync "custom_metadata":
   var checked = 0
   var client = newClient(localHost, localPort)
   with client:
-    let stream = client.newGrpcStream(unaryCallPath)
-    with stream:
-      await stream.sendMetadata()
-      await stream.sendMessage(SimpleRequest(
-        responseSize: 314159,
-        payload: Payload(body: newSeq[byte](271828))
-      ))
-      let reply = await stream.recvMessage(SimpleResponse)
-      doAssert reply.payload.body.len == 314159
-      doAssert xInitialKey & ": " & xInitialValue in stream.headers[]
-      doAssert xTrailingKey notin stream.headers[]
+    block:
+      let stream = client.newGrpcStream(unaryCallPath)
+      with stream:
+        await stream.sendMetadata()
+        await stream.sendMessage(SimpleRequest(
+          responseSize: 314159,
+          payload: Payload(body: newSeq[byte](271828))
+        ))
+        let reply = await stream.recvMessage(SimpleResponse)
+        doAssert reply.payload.body.len == 314159
+        doAssert xInitialKey & ": " & xInitialValue in stream.headers[]
+        doAssert xTrailingKey notin stream.headers[]
+        inc checked
+      # XXX wait for trailers
+      doAssert xTrailingKey & ": " & xTrailingValue in stream.headers[]
       inc checked
-    # XXX wait for trailers
-    doAssert xTrailingKey & ": " & xTrailingValue in stream.headers[]
-    inc checked
-  doAssert checked == 2
+    block:
+      let stream = client.newGrpcStream(fullDuplexCallPath)
+      with stream:
+        await stream.sendMetadata()
+        await stream.sendMessage(
+          StreamingOutputCallRequest(
+            responseParameters: @[
+              ResponseParameters(size: 314159'i32)
+            ],
+            payload: Payload(body: newSeq[byte](271828))
+          )
+        )
+        await stream.sendEnd()
+        let reply = await stream.recvMessage(StreamingOutputCallResponse)
+        doAssert reply.payload.body.len == 314159
+        doAssert xInitialKey & ": " & xInitialValue in stream.headers[]
+        doAssert xTrailingKey notin stream.headers[]
+        inc checked
+      # XXX wait for trailers
+      doAssert xTrailingKey & ": " & xTrailingValue in stream.headers[]
+      inc checked
+  doAssert checked == 4
