@@ -46,6 +46,7 @@ proc name*(code: StatusCode): string {.raises: [].} =
   else: doAssert false; ""
 
 func toStatusCode*(code: ErrorCode): StatusCode {.raises: [].} =
+  ## translate http2 codes to status codes; for internal use
   case code
   of errNoError,
       errProtocolError,

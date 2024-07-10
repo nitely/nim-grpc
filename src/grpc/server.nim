@@ -2,7 +2,6 @@ import std/asyncdispatch
 import std/tables
 
 import pkg/hyperx/server
-import pkg/hyperx/errors
 
 import ./clientserver
 import ./errors
@@ -79,16 +78,18 @@ proc processStream(
       await strm.sendNoError()
       return
     try:
+      # XXX should never raise an hyperx error
+      #     translate them to GrpcFailure in every API
+      #     but RST needs its own error to reply it
       await routes[reqHeaders.path](strm)
     except GrpcFailure as err:
       if not strm.trailersSent:
         await failSilently strm.sendTrailers(err.code, err.message)
         await failSilently strm.sendNoError()
       raise err
-    # XXX HyperxStrmError needs to expose err codes
-    except StrmError as err:
+    except HyperxStrmError as err:
       if not strm.trailersSent:
-        await failSilently strm.sendTrailers(err.code.toStatusCode)
+        await failSilently strm.sendTrailers(stcCancelled)
         await failSilently strm.sendNoError()
       raise err
     except CatchableError as err:

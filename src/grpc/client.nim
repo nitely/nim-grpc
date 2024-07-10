@@ -2,6 +2,7 @@ import std/asyncdispatch
 import std/strbasics
 
 import pkg/hyperx/client
+import pkg/hyperx/errors
 
 import ./clientserver
 import ./errors
@@ -26,9 +27,11 @@ export
   sendHeaders,
   protobuf
 
+# XXX no API should raise hyperx errors
 template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient
   var failure = false
+  var failureCode = stcInternal
   try:
     with strm.stream:
       block:
@@ -43,7 +46,16 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         check recvData[].len == 0
         check strm.recvEnded
         check not recved
-  except HyperxError, GrpcFailure:
+  except GrpcFailure as err:
+    failure = true
+    failureCode = err.code
+  except ConnError as err:
+    failure = true
+    failureCode = err.code.toStatusCode
+  except StrmError as err:
+    failure = true
+    failureCode = err.code.toStatusCode
+  except HyperxError:
     #debugEcho err.msg
     failure = true
   strm.headers[].add strm.stream.recvTrailers
@@ -55,4 +67,4 @@ template with*(strm: GrpcStream, body: untyped): untyped =
       respHeaders.statusMsg
     )
   if failure:
-    raise newGrpcFailure()
+    raise newGrpcFailure(failureCode)
