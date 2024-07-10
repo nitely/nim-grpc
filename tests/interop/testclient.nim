@@ -448,3 +448,25 @@ testAsync "cancel_after_begin":
       doAssert err.code == stcCancelled, $err.code
       inc checked
   doAssert checked == 1
+
+testAsync "cancel_after_first_response":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    try:
+      let stream = client.newGrpcStream(fullDuplexCallPath)
+      with stream:
+        await stream.sendMessage(StreamingOutputCallRequest(
+          responseParameters: @[
+            ResponseParameters(size: 31415)
+          ],
+          payload: Payload(body: newSeq[byte](27182))
+        ))
+        let reply = await stream.recvMessage(StreamingOutputCallResponse)
+        doAssert reply.payload.body.len == 31415
+        await stream.sendCancel()
+        inc checked
+    except GrpcResponseError as err:
+      doAssert err.code == stcCancelled, $err.code
+      inc checked
+  doAssert checked == 2
