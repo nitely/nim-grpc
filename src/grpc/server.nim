@@ -2,6 +2,7 @@ import std/asyncdispatch
 import std/tables
 
 import pkg/hyperx/server
+import pkg/hyperx/errors
 
 import ./clientserver
 import ./errors
@@ -21,7 +22,9 @@ export
   sendHeaders,
   protobuf
 
+# XXX change name or move to clientserver
 template with*(strm: GrpcStream, body: untyped): untyped =
+  doAssert strm.typ == gtServer
   try:
     with strm.stream:
       block:
@@ -50,6 +53,7 @@ func trailersOut*(strm: GrpcStream, status: StatusCode, msg = ""): Headers =
     result[].add ("grpc-message", percentEnc msg)
 
 proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
+  doAssert strm.typ == gtServer
   doAssert not strm.stream.sendEnded
   doAssert not strm.trailersSent
   strm.trailersSent = true
@@ -60,6 +64,10 @@ proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
 proc sendTrailers(strm: GrpcStream, status: StatusCode, msg = "") {.async.} =
   await strm.sendTrailers(strm.trailersOut(status, msg))
 
+proc sendCancel*(strm: GrpcStream, status: StatusCode) {.async.} =
+  await strm.sendTrailers(status)
+  await strm.sendCancel()
+
 proc processStream(
   strm: GrpcStream, routes: GrpcRoutes
 ) {.async.} =
@@ -67,18 +75,26 @@ proc processStream(
     await strm.stream.recvHeaders(strm.headers)
     let reqHeaders = toRequestHeaders strm.headers[]
     if reqHeaders.path notin routes:
-      # XXX send RST
       await strm.sendTrailers(stcNotFound)
+      await strm.sendNoError()
       return
     try:
       await routes[reqHeaders.path](strm)
     except GrpcFailure as err:
       if not strm.trailersSent:
         await failSilently strm.sendTrailers(err.code, err.message)
+        await failSilently strm.sendNoError()
+      raise err
+    # XXX HyperxStrmError needs to expose err codes
+    except StrmError as err:
+      if not strm.trailersSent:
+        await failSilently strm.sendTrailers(err.code.toStatusCode)
+        await failSilently strm.sendNoError()
       raise err
     except CatchableError as err:
       if not strm.trailersSent:
         await failSilently strm.sendTrailers(stcInternal)
+        await failSilently strm.sendNoError()
       raise err
     if not strm.trailersSent:
       await strm.sendTrailers(stcOk)

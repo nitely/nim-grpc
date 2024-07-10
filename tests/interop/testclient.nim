@@ -432,3 +432,19 @@ testAsync "unimplemented_service":
       doAssert err.code == stcUnimplemented
       inc checked
   doAssert checked == 1
+
+testAsync "cancel_after_begin":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    try:
+      let stream = client.newGrpcStream(streamingInputCallPath)
+      with stream:
+        await stream.sendHeaders()
+        await stream.sendCancel()
+        # note recvMessage should usually be called here until
+        # server actually cancels
+    except GrpcResponseError as err:
+      doAssert err.code == stcCancelled, $err.code
+      inc checked
+  doAssert checked == 1

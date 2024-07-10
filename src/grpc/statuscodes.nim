@@ -1,3 +1,4 @@
+import pkg/hyperx/errors
 
 # XXX GrpcStatusCode
 type StatusCode* = distinct uint8
@@ -43,3 +44,26 @@ proc name*(code: StatusCode): string {.raises: [].} =
   of stcDataLoss: "DATA_LOSS"
   of stcUnauthenticated: "UNAUTHENTICATED"
   else: doAssert false; ""
+
+func toStatusCode*(code: ErrorCode): StatusCode {.raises: [].} =
+  case code
+  of errNoError,
+      errProtocolError,
+      errInternalError,
+      errFlowControlError,
+      errSettingsTimeout,
+      errFrameSizeError,
+      errCompressionError,
+      errConnectError:
+    stcInternal
+  of errRefusedStream:
+    stcUnavailable
+  of errCancel:
+    stcCancelled
+  of errEnhanceYourCalm:
+    stcResourceExhausted
+  of errInadequateSecurity:
+    stcPermissionDenied
+  #of errStreamClosed, errHttp11Required:
+  else:
+    stcUnknown

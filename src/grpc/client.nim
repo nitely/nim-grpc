@@ -18,6 +18,7 @@ export
   recvMessage,
   sendMessage,
   sendEnd,
+  sendCancel,
   whileRecvMessages,
   GrpcStream,
   newGrpcStream,
@@ -26,6 +27,7 @@ export
   protobuf
 
 template with*(strm: GrpcStream, body: untyped): untyped =
+  doAssert strm.typ == gtClient
   var failure = false
   try:
     with strm.stream:

@@ -14,12 +14,13 @@ It works on top of [hyperx](https://github.com/nitely/nim-hyperx).
 
 - [x] Client
 - [x] Server
+- [x] Compression
 - [ ] Interop tests
 - [ ] Code gen proto Service
-- [x] Compression
 - [ ] JSON
 - [ ] UDS
 - [ ] non-TLS
+- [ ] Auth
 
 ## LICENSE
 

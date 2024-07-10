@@ -3,15 +3,16 @@ import std/asyncdispatch
 import std/strbasics
 
 import pkg/hyperx/client
+import pkg/hyperx/errors
 
 import ./errors
 import ./utils
 
 type Headers* = ref seq[(string, string)]
-type GrpcTyp = enum
+type GrpcTyp* = enum
   gtServer, gtClient
 type GrpcStream* = ref object
-  typ: GrpcTyp
+  typ*: GrpcTyp
   stream*: ClientStream
   path*: ref string
   headers*: ref string
@@ -114,6 +115,12 @@ proc sendMessage*(
   if not strm.headersSent:
     await strm.sendHeaders()
   await strm.stream.sendBody(data, finish)
+
+proc sendCancel*(strm: GrpcStream) {.async.} =
+  await strm.stream.sendRst(errCancel)
+
+proc sendNoError*(strm: GrpcStream) {.async.} =
+  await strm.stream.sendRst(errNoError)
 
 proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
   ## An error is raised if the stream recv ends without a message.
