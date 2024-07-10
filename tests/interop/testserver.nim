@@ -47,6 +47,11 @@ proc unaryCall(strm: GrpcStream) {.async.} =
   let (compressed, request) = await strm.recvMessage2(SimpleRequest)
   check compressed == request.expectCompressed.value,
     newGrpcFailure(stcInvalidArg)
+  check request.responseStatus.code == 0,
+    newGrpcFailure(
+      request.responseStatus.code.StatusCode,
+      request.responseStatus.message
+    )
   await strm.sendMessage(
     SimpleResponse(
       payload: Payload(body: newSeq[byte](request.responseSize))
@@ -80,6 +85,11 @@ proc fullDuplexCall(strm: GrpcStream) {.async.} =
   await strm.echoMetadataInitial()
   whileRecvMessages strm:
     let request = await strm.recvMessage(StreamingOutputCallRequest)
+    check request.responseStatus.code == 0,
+      newGrpcFailure(
+        request.responseStatus.code.StatusCode,
+        request.responseStatus.message
+      )
     for rp in request.responseParameters:
       await strm.sendMessage(StreamingOutputCallResponse(
         payload: Payload(body: newSeq[byte](rp.size))

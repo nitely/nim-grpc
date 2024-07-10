@@ -49,8 +49,8 @@ template with*(strm: GrpcStream, body: untyped): untyped =
   let respHeaders = toResponseHeaders strm.headers[]
   if respHeaders.status != stcOk:
     raise newGrpcResponseError(
-      respHeaders.statusMsg,
-      respHeaders.status
+      respHeaders.status,
+      respHeaders.statusMsg
     )
   if failure:
     raise newGrpcFailure()

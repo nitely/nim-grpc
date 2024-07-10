@@ -43,8 +43,11 @@ type
   GrpcCallback* = proc(strm: GrpcStream) {.async.}
   GrpcRoutes* = TableRef[string, GrpcCallback]
 
-func trailersOut*(strm: GrpcStream, status: StatusCode): Headers =
-  newSeqRef(@[("grpc-status", $status)])
+func trailersOut*(strm: GrpcStream, status: StatusCode, msg = ""): Headers =
+  result = newSeqRef[(string, string)]()
+  result[].add ("grpc-status", $status)
+  if msg.len > 0:
+    result[].add ("grpc-message", msg)
 
 proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
   doAssert not strm.stream.sendEnded
@@ -54,8 +57,8 @@ proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
     await strm.sendHeaders()
   await strm.stream.sendHeaders(headers, finish = true)
 
-proc sendTrailers(strm: GrpcStream, status: StatusCode) {.async.} =
-  await strm.sendTrailers(strm.trailersOut(status))
+proc sendTrailers(strm: GrpcStream, status: StatusCode, msg = "") {.async.} =
+  await strm.sendTrailers(strm.trailersOut(status, msg))
 
 proc processStream(
   strm: GrpcStream, routes: GrpcRoutes
@@ -71,7 +74,7 @@ proc processStream(
       await routes[reqHeaders.path](strm)
     except GrpcFailure as err:
       if not strm.trailersSent:
-        await failSilently strm.sendTrailers(err.code)
+        await failSilently strm.sendTrailers(err.code, err.message)
       raise err
     except CatchableError as err:
       if not strm.trailersSent:

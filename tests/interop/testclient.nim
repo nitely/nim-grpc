@@ -343,3 +343,37 @@ testAsync "custom_metadata":
       doAssert xTrailingKey & ": " & xTrailingValue in stream.headers[]
       inc checked
   doAssert checked == 4
+
+testAsync "status_code_and_message":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    try:
+      let stream = client.newGrpcStream(unaryCallPath)
+      with stream:
+        await stream.sendMessage(SimpleRequest(
+          responseStatus: EchoStatus(code: 2, message: "test status message")
+        ))
+        discard await stream.recvMessage(SimpleResponse)
+        doAssert false
+    except GrpcResponseError as err:
+      doAssert err.code == 2.StatusCode
+      doAssert err.msg == "test status message"
+      inc checked
+    try:
+      let stream = client.newGrpcStream(fullDuplexCallPath)
+      with stream:
+        await stream.sendMetadata()
+        await stream.sendMessage(
+          StreamingOutputCallRequest(
+            responseStatus: EchoStatus(code: 2, message: "test status message")
+          )
+        )
+        await stream.sendEnd()
+        discard await stream.recvMessage(StreamingOutputCallResponse)
+        doAssert false
+    except GrpcResponseError as err:
+      doAssert err.code == 2.StatusCode
+      doAssert err.msg == "test status message"
+      inc checked
+  doAssert checked == 2
