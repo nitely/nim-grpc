@@ -47,7 +47,7 @@ func trailersOut*(strm: GrpcStream, status: StatusCode, msg = ""): Headers =
   result = newSeqRef[(string, string)]()
   result[].add ("grpc-status", $status)
   if msg.len > 0:
-    result[].add ("grpc-message", msg)
+    result[].add ("grpc-message", percentEnc msg)
 
 proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
   doAssert not strm.stream.sendEnded

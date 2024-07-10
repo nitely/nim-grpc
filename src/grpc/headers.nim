@@ -1,5 +1,6 @@
 import std/strutils
 import ./statuscodes
+import ./utils
 
 iterator headersIt*(s: string): (Slice[int], Slice[int]) {.inline.} =
   ## Ported from hyperx
@@ -53,7 +54,7 @@ func toResponseHeaders*(s: string): ResponseHeaders =
     if toOpenArray(s, nn.a, nn.b) == "grpc-status":
       result.status = parseStatusCode toOpenArray(s, vv.a, vv.b)
     elif toOpenArray(s, nn.a, nn.b) == "grpc-message":
-      result.statusMsg = s[vv]
+      result.statusMsg = percentDec s[vv]
 
 type RequestHeaders* = ref object
   path*: string

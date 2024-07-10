@@ -358,7 +358,7 @@ testAsync "status_code_and_message":
         doAssert false
     except GrpcResponseError as err:
       doAssert err.code == 2.StatusCode
-      doAssert err.msg == "test status message"
+      doAssert err.message == "test status message"
       inc checked
     try:
       let stream = client.newGrpcStream(fullDuplexCallPath)
@@ -374,6 +374,27 @@ testAsync "status_code_and_message":
         doAssert false
     except GrpcResponseError as err:
       doAssert err.code == 2.StatusCode
-      doAssert err.msg == "test status message"
+      doAssert err.message == "test status message"
       inc checked
   doAssert checked == 2
+
+testAsync "special_status_message":
+  let expectedMessage = "\t\ntest with whitespace\r\nand Unicode BMP ☺ and non-BMP 😈\t\n"
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    try:
+      let stream = client.newGrpcStream(unaryCallPath)
+      with stream:
+        await stream.sendMessage(SimpleRequest(
+          responseStatus: EchoStatus(
+            code: 2, message: expectedMessage
+          )
+        ))
+        discard await stream.recvMessage(SimpleResponse)
+        doAssert false
+    except GrpcResponseError as err:
+      doAssert err.code == 2.StatusCode
+      doAssert err.message == expectedMessage
+      inc checked
+  doAssert checked == 1

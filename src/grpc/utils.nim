@@ -1,4 +1,5 @@
 import std/strbasics
+import std/uri
 
 import pkg/zippy
 
@@ -64,3 +65,12 @@ proc pbEncode*[T](s: T, compress = false): ref string {.raises: [GrpcFailure].} 
 proc pbDecode*[T](s: ref string, t: typedesc[T]): T {.raises: [GrpcFailure].} =
   let ss = s[].fromWireData
   result = tryCatch Protobuf.decode(ss, t)
+
+# XXX validate utf8; replace bad chars
+func percentEnc*(s: string): string {.raises: [].} =
+  ## rfc3986 percent encoder
+  encodeUrl(s, usePlus = false)
+
+func percentDec*(s: string): string {.raises: [].} =
+  ## rfc3986 percent decoder
+  decodeUrl(s, decodePlus = true)

@@ -9,11 +9,12 @@ type
   GrpcNoMessageException* = object of GrpcFailure
   GrpcResponseError* = object of GrpcError
     code*: StatusCode
+    message*: string
 
 func newGrpcResponseError*(
-  code: StatusCode, msg: string
+  code: StatusCode, message: string
 ): ref GrpcResponseError {.raises: [].} =
-  result = (ref GrpcResponseError)(msg: msg, code: code)
+  result = (ref GrpcResponseError)(msg: code.name, code: code, message: message)
 
 func newGrpcFailure*(
   code: StatusCode, message = ""
