@@ -96,6 +96,9 @@ proc fullDuplexCall(strm: GrpcStream) {.async.} =
       ))
   await strm.echoMetadataTrailing()
 
+proc unimplementedCall(strm: GrpcStream) {.async.} =
+  raise newGrpcFailure(stcUnimplemented)
+
 proc main() {.async.} =
   echo "Serving forever"
   let server = newServer(localHost, localPort, certFile, keyFile)
@@ -105,6 +108,8 @@ proc main() {.async.} =
     "/grpc.testing.TestService/StreamingInputCall": streamingInputCall.GrpcCallback,
     "/grpc.testing.TestService/StreamingOutputCall": streamingOutputCall.GrpcCallback,
     "/grpc.testing.TestService/FullDuplexCall": fullDuplexCall.GrpcCallback,
+    "/grpc.testing.TestService/UnimplementedCall": unimplementedCall.GrpcCallback,
+    "/grpc.testing.UnimplementedService/UnimplementedCall": unimplementedCall.GrpcCallback,
   }.newtable)
 
 waitFor main()

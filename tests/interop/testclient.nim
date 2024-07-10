@@ -398,3 +398,37 @@ testAsync "special_status_message":
       doAssert err.message == expectedMessage
       inc checked
   doAssert checked == 1
+
+testAsync "unimplemented_method":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    try:
+      let stream = client.newGrpcStream(
+        "/grpc.testing.TestService/UnimplementedCall"
+      )
+      with stream:
+        await stream.sendMessage(Empty())
+        discard await stream.recvMessage(Empty)
+        doAssert false
+    except GrpcResponseError as err:
+      doAssert err.code == stcUnimplemented
+      inc checked
+  doAssert checked == 1
+
+testAsync "unimplemented_service":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    try:
+      let stream = client.newGrpcStream(
+        "/grpc.testing.UnimplementedService/UnimplementedCall"
+      )
+      with stream:
+        await stream.sendMessage(Empty())
+        discard await stream.recvMessage(Empty)
+        doAssert false
+    except GrpcResponseError as err:
+      doAssert err.code == stcUnimplemented
+      inc checked
+  doAssert checked == 1
