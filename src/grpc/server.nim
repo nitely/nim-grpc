@@ -24,22 +24,17 @@ export
 # XXX change name or move to clientserver
 template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtServer
-  try:
-    with strm.stream:
-      block:
-        body
-      if not strm.stream.sendEnded:
-        await strm.sendMessage(newStringRef(), finish = true)
-      if not strm.recvEnded:
-        let recvData = newStringRef()
-        let recved = await strm.recvMessage(recvData)
-        check recvData[].len == 0
-        check strm.recvEnded
-        check not recved
-  except HyperxError:
-    debugEcho getCurrentException().msg
-    debugEcho getCurrentException().getStackTrace()
-    raise newGrpcFailure()
+  with strm.stream:
+    block:
+      body
+    if not strm.stream.sendEnded:
+      await strm.sendMessage(newStringRef(), finish = true)
+    if not strm.recvEnded:
+      let recvData = newStringRef()
+      let recved = await strm.recvMessage(recvData)
+      check recvData[].len == 0
+      check strm.recvEnded
+      check not recved
 
 type
   GrpcCallback* = proc(strm: GrpcStream) {.async.}
@@ -58,7 +53,7 @@ proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
   strm.trailersSent = true
   if not strm.headersSent:
     await strm.sendHeaders()
-  await strm.stream.sendHeaders(headers, finish = true)
+  tryHyperx await strm.stream.sendHeaders(headers, finish = true)
 
 proc sendTrailers(strm: GrpcStream, status: StatusCode, msg = "") {.async.} =
   await strm.sendTrailers(strm.trailersOut(status, msg))
@@ -71,16 +66,13 @@ proc processStream(
   strm: GrpcStream, routes: GrpcRoutes
 ) {.async.} =
   with strm:
-    await strm.stream.recvHeaders(strm.headers)
+    tryHyperx await strm.stream.recvHeaders(strm.headers)
     let reqHeaders = toRequestHeaders strm.headers[]
     if reqHeaders.path notin routes:
       await strm.sendTrailers(stcNotFound)
       await strm.sendNoError()
       return
     try:
-      # XXX should never raise an hyperx error
-      #     translate them to GrpcFailure in every API
-      #     but RST needs its own error to reply it
       await routes[reqHeaders.path](strm)
     except GrpcRemoteFailure as err:
       if not strm.trailersSent:
@@ -106,9 +98,12 @@ proc processStreamHandler(
 ) {.async.} =
   try:
     await processStream(strm, routes)
-  except HyperxStrmError, HyperxConnError, GrpcFailure:
-    debugEcho getCurrentException().getStackTrace()
-    debugEcho getCurrentException().msg
+  except GrpcFailure as err:
+    debugEcho err.getStackTrace()
+    debugEcho err.msg
+  except CatchableError as err:
+    debugEcho err.getStackTrace()
+    debugEcho err.msg
 
 proc processClient(
   client: ClientContext,
@@ -125,7 +120,7 @@ proc processClientHandler(
 ) {.async.} =
   try:
     await processClient(client, routes)
-  except HyperxConnError as err:
+  except CatchableError as err:
     debugEcho err.getStackTrace()
     debugEcho err.msg
 
