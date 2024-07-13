@@ -6,6 +6,7 @@ type
   GrpcFailure* = object of GrpcError
     code*: StatusCode
     message*: string
+  GrpcRemoteFailure* = object of GrpcFailure
   GrpcNoMessageException* = object of GrpcFailure
   GrpcResponseError* = object of GrpcError
     code*: StatusCode
@@ -23,6 +24,11 @@ func newGrpcFailure*(
 
 func newGrpcFailure*(): ref GrpcFailure {.raises: [].} =
   result = newGrpcFailure(stcInternal)
+
+func newGrpcRemoteFailure*(
+  code: StatusCode, message = ""
+): ref GrpcRemoteFailure {.raises: [].} =
+  result = (ref GrpcRemoteFailure)(msg: code.name, code: code, message: message)
 
 func newGrpcNoMessageException*(): ref GrpcNoMessageException {.raises: [].} =
   result = (ref GrpcNoMessageException)(

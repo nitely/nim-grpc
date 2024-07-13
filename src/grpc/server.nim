@@ -82,14 +82,14 @@ proc processStream(
       #     translate them to GrpcFailure in every API
       #     but RST needs its own error to reply it
       await routes[reqHeaders.path](strm)
+    except GrpcRemoteFailure as err:
+      if not strm.trailersSent:
+        await failSilently strm.sendTrailers(stcCancelled)
+        await failSilently strm.sendNoError()
+      raise err
     except GrpcFailure as err:
       if not strm.trailersSent:
         await failSilently strm.sendTrailers(err.code, err.message)
-        await failSilently strm.sendNoError()
-      raise err
-    except HyperxStrmError as err:
-      if not strm.trailersSent:
-        await failSilently strm.sendTrailers(stcCancelled)
         await failSilently strm.sendNoError()
       raise err
     except CatchableError as err:

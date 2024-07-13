@@ -1,10 +1,30 @@
 import std/strbasics
 import std/uri
 
+import pkg/hyperx/errors
 import pkg/zippy
 
 import ./protobuf
 import ./errors
+import ./statuscodes
+
+template tryHyperx*(body: untyped): untyped =
+  try:
+    body
+  except StrmError as err:
+    debugEcho err.getStackTrace()
+    debugEcho err.msg
+    raise case err.typ
+      of hxLocalErr: newGrpcFailure(err.code.toStatusCode)
+      of hxRemoteErr: newGrpcRemoteFailure(err.code.toStatusCode)
+  except ConnError as err:
+    debugEcho err.getStackTrace()
+    debugEcho err.msg
+    raise newGrpcFailure(err.code.toStatusCode)
+  except HyperxError as err:
+    debugEcho err.getStackTrace()
+    debugEcho err.msg
+    raise newGrpcFailure()
 
 template tryCatch*(body: untyped): untyped =
   try:

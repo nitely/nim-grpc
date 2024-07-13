@@ -49,15 +49,9 @@ template with*(strm: GrpcStream, body: untyped): untyped =
   except GrpcFailure as err:
     failure = true
     failureCode = err.code
-  except ConnError as err:
-    failure = true
-    failureCode = err.code.toStatusCode
-  except StrmError as err:
-    failure = true
-    failureCode = err.code.toStatusCode
   except HyperxError:
     #debugEcho err.msg
-    failure = true
+    doAssert false
   strm.headers[].add strm.stream.recvTrailers
   #debugEcho strm.headers[]
   let respHeaders = toResponseHeaders strm.headers[]

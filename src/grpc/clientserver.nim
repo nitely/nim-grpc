@@ -40,11 +40,11 @@ proc newGrpcStream*(client: ClientContext, path: string): GrpcStream =
   newGrpcStream(gtClient, newClientStream(client), path)
 
 proc recvEnded*(strm: GrpcStream): bool =
-  result = strm.stream.recvEnded() and strm.buff[].len == 0
+  result = strm.stream.recvEnded and strm.buff[].len == 0
 
 proc recvHeaders*(strm: GrpcStream) {.async.} =
   doAssert strm.headers[].len == 0
-  await strm.stream.recvHeaders(strm.headers)
+  tryHyperx await strm.stream.recvHeaders(strm.headers)
 
 func recordSize(data: string): int =
   if data.len == 0:
@@ -71,7 +71,7 @@ proc recvMessage*(
   if strm.headers[].len == 0:
     await strm.recvHeaders()
   while not strm.stream.recvEnded and not strm.buff[].hasFullRecord:
-    await strm.stream.recvBody(strm.buff)
+    tryHyperx await strm.stream.recvBody(strm.buff)
   check strm.buff[].hasFullRecord or strm.buff[].len == 0
   let L = strm.buff[].recordSize
   data[].add toOpenArray(strm.buff[], 0, L-1)
@@ -103,7 +103,7 @@ func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
 proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
   doAssert not strm.headersSent
   strm.headersSent = true
-  await strm.stream.sendHeaders(headers, finish = false)
+  tryHyperx await strm.stream.sendHeaders(headers, finish = false)
 
 proc sendHeaders*(strm: GrpcStream) {.async.} =
   await strm.sendHeaders(strm.headersOut)
@@ -114,13 +114,13 @@ proc sendMessage*(
   doAssert not strm.stream.sendEnded
   if not strm.headersSent:
     await strm.sendHeaders()
-  await strm.stream.sendBody(data, finish)
+  tryHyperx await strm.stream.sendBody(data, finish)
 
 proc sendCancel*(strm: GrpcStream) {.async.} =
-  await strm.stream.sendRst(errCancel)
+  tryHyperx await strm.stream.sendRst(errCancel)
 
 proc sendNoError*(strm: GrpcStream) {.async.} =
-  await strm.stream.sendRst(errNoError)
+  tryHyperx await strm.stream.sendRst(errNoError)
 
 proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
   ## An error is raised if the stream recv ends without a message.
@@ -158,6 +158,6 @@ proc failSilently*(fut: Future[void]) {.async.} =
   try:
     if fut != nil:
       await fut
-  except HyperxError as err:
-    debugEcho err.msg
-    debugEcho err.getStackTrace()
+  except HyperxError, GrpcFailure:
+    debugEcho getCurrentException().msg
+    debugEcho getCurrentException().getStackTrace()
