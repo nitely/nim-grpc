@@ -11,22 +11,33 @@ import ./utils
 type Headers* = ref seq[(string, string)]
 type GrpcTyp* = enum
   gtServer, gtClient
+type GrpcTimeoutUnit* = enum
+  grpcHour, grpcMinute, grpcSecond, grpcMsec, grpcUsec, grpcNsec
 type GrpcStream* = ref object
   typ*: GrpcTyp
   stream*: ClientStream
   path*: ref string
+  timeout*: int
+  timeoutUnit*: GrpcTimeoutUnit
   headers*: ref string
   headersSent*: bool  # XXX state
   trailersSent*: bool  # XXX state
   buff: ref string
 
 proc newGrpcStream(
-  typ: GrpcTyp, stream: ClientStream, path = ""
+  typ: GrpcTyp,
+  stream: ClientStream,
+  path = "",
+  timeout = 0,
+  timeoutUnit = grpcMsec
 ): GrpcStream =
+  doAssert timeout < 100_000_000
   GrpcStream(
     typ: typ,
     stream: stream,
     path: newStringRef(path),
+    timeout: timeout,
+    timeoutUnit: timeoutUnit,
     headers: newStringRef(),
     buff: newStringRef()
   )
@@ -35,9 +46,16 @@ proc newGrpcStream*(stream: ClientStream): GrpcStream =
   ## Server stream
   newGrpcStream(gtServer, stream)
 
-proc newGrpcStream*(client: ClientContext, path: string): GrpcStream =
+proc newGrpcStream*(
+  client: ClientContext,
+  path: string,
+  timeout = 0,
+  timeoutUnit = grpcMsec
+): GrpcStream =
   ## Client stream
-  newGrpcStream(gtClient, newClientStream(client), path)
+  newGrpcStream(
+    gtClient, newClientStream(client), path, timeout, timeoutUnit
+  )
 
 proc recvEnded*(strm: GrpcStream): bool =
   result = strm.stream.recvEnded and strm.buff[].len == 0
@@ -78,10 +96,19 @@ proc recvMessage*(
   strm.buff[].setSlice L .. strm.buff[].len-1
   result = L > 0
 
+func `$`(typ: GrpcTimeoutUnit): char =
+  case typ
+  of grpcHour: 'H'
+  of grpcMinute: 'M'
+  of grpcSecond: 'S'
+  of grpcMsec: 's'
+  of grpcUsec: 'u'
+  of grpcNsec: 'n'
+
 func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
   case strm.typ
   of gtClient:
-    newSeqRef(@[
+    var headers = @[
       (":method", "POST"),
       (":scheme", "https"),
       (":path", strm.path[]),
@@ -91,7 +118,10 @@ func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
       ("grpc-accept-encoding", "identity, gzip, deflate"),
       ("user-agent", "grpc-nim/0.1.0"),
       ("content-type", "application/grpc+proto")
-    ])
+    ]
+    if strm.timeout > 0:
+      headers.add ("grpc-timeout", $strm.timeout & ' ' & $strm.timeoutUnit)
+    newSeqRef(headers)
   of gtServer:
     newSeqRef(@[
       (":status", "200"),
@@ -159,5 +189,5 @@ proc failSilently*(fut: Future[void]) {.async.} =
     if fut != nil:
       await fut
   except HyperxError, GrpcFailure:
-    debugEcho getCurrentException().msg
-    debugEcho getCurrentException().getStackTrace()
+    debugInfo getCurrentException().msg
+    debugInfo getCurrentException().getStackTrace()

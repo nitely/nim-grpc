@@ -470,3 +470,24 @@ testAsync "cancel_after_first_response":
       doAssert err.code == stcCancelled, $err.code
       inc checked
   doAssert checked == 2
+
+testAsync "timeout_on_sleeping_server":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    try:
+      let stream = client.newGrpcStream(
+        fullDuplexCallPath,
+        timeout = 100,
+        timeoutUnit = grpcMsec
+      )
+      with stream:
+        await stream.sendMessage(StreamingOutputCallRequest(
+          payload: Payload(body: newSeq[byte](27182))
+        ))
+        whileRecvMessages stream:
+          discard await stream.recvMessage(StreamingOutputCallResponse)
+    except GrpcResponseError as err:
+      doAssert err.code == stcDeadlineEx, $err.code
+      inc checked
+  doAssert checked == 1

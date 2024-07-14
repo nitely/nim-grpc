@@ -25,6 +25,7 @@ export
   newGrpcStream,
   headersOut,
   sendHeaders,
+  GrpcTimeoutUnit,
   protobuf
 
 # XXX no API should raise hyperx errors
@@ -50,10 +51,11 @@ template with*(strm: GrpcStream, body: untyped): untyped =
     failure = true
     failureCode = err.code
   except HyperxError:
-    #debugEcho err.msg
+    debugInfo getCurrentException().getStackTrace()
+    debugInfo getCurrentException().msg
     doAssert false
   strm.headers[].add strm.stream.recvTrailers
-  #debugEcho strm.headers[]
+  debugInfo strm.headers[]
   let respHeaders = toResponseHeaders strm.headers[]
   if respHeaders.status != stcOk:
     raise newGrpcResponseError(

@@ -73,7 +73,20 @@ proc processStream(
       await strm.sendNoError()
       return
     try:
-      await routes[reqHeaders.path](strm)
+      # XXX replace withTimeout is really bad
+      if reqHeaders.timeout > 0:
+        let rpcFut = routes[reqHeaders.path](strm)
+        let ok = await withTimeout(rpcFut, reqHeaders.timeout)
+        if not ok and not strm.trailersSent:
+          await failSilently strm.sendTrailers(stcDeadlineEx)
+          await failSilently strm.sendNoError()
+          await failSilently rpcFut
+          # XXX terminate rpcFut so it stops recv
+          # XXX send+recv ping to make sure the client recv the rst
+          # XXX consume recv until ping is done
+          # await failSilently strm.ping()
+      else:
+        await routes[reqHeaders.path](strm)
     except GrpcRemoteFailure as err:
       if not strm.trailersSent:
         await failSilently strm.sendTrailers(stcCancelled)
@@ -98,12 +111,12 @@ proc processStreamHandler(
 ) {.async.} =
   try:
     await processStream(strm, routes)
-  except GrpcFailure as err:
-    debugEcho err.getStackTrace()
-    debugEcho err.msg
-  except CatchableError as err:
-    debugEcho err.getStackTrace()
-    debugEcho err.msg
+  except GrpcFailure:
+    debugInfo getCurrentException().getStackTrace()
+    debugInfo getCurrentException().msg
+  except CatchableError:
+    debugInfo getCurrentException().getStackTrace()
+    debugInfo getCurrentException().msg
 
 proc processClient(
   client: ClientContext,
@@ -120,9 +133,9 @@ proc processClientHandler(
 ) {.async.} =
   try:
     await processClient(client, routes)
-  except CatchableError as err:
-    debugEcho err.getStackTrace()
-    debugEcho err.msg
+  except CatchableError:
+    debugInfo getCurrentException().getStackTrace()
+    debugInfo getCurrentException().msg
 
 proc serve*(server: ServerContext, routes: GrpcRoutes) {.async.} =
   with server:

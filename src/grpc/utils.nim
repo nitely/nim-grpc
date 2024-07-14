@@ -8,30 +8,38 @@ import ./protobuf
 import ./errors
 import ./statuscodes
 
+template debugInfo*(s: untyped): untyped =
+  when defined(grpcDebug):
+    # hide "s" expresion side effcets
+    {.cast(noSideEffect).}:
+      debugEcho s
+  else:
+    discard
+
 template tryHyperx*(body: untyped): untyped =
   try:
     body
   except StrmError as err:
-    debugEcho err.getStackTrace()
-    debugEcho err.msg
+    debugInfo err.getStackTrace()
+    debugInfo err.msg
     raise case err.typ
       of hxLocalErr: newGrpcFailure(err.code.toStatusCode)
       of hxRemoteErr: newGrpcRemoteFailure(err.code.toStatusCode)
   except ConnError as err:
-    debugEcho err.getStackTrace()
-    debugEcho err.msg
+    debugInfo err.getStackTrace()
+    debugInfo err.msg
     raise newGrpcFailure(err.code.toStatusCode)
-  except HyperxError as err:
-    debugEcho err.getStackTrace()
-    debugEcho err.msg
+  except HyperxError:
+    debugInfo getCurrentException().getStackTrace()
+    debugInfo getCurrentException().msg
     raise newGrpcFailure()
 
 template tryCatch*(body: untyped): untyped =
   try:
     body
-  except CatchableError as err:
-    debugEcho err.getStackTrace()
-    debugEcho err.msg
+  except CatchableError:
+    debugInfo getCurrentException().getStackTrace()
+    debugInfo getCurrentException().msg
     raise newGrpcFailure()
 
 template check*(cond: untyped): untyped =
