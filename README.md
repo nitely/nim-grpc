@@ -15,7 +15,7 @@ It works on top of [hyperx](https://github.com/nitely/nim-hyperx).
 - [x] Client
 - [x] Server
 - [x] Compression
-- [ ] Interop tests
+- [x] Interop tests
 - [ ] Code gen proto Service
 - [ ] JSON
 - [ ] UDS
