@@ -80,7 +80,7 @@ proc processStream(
         if not ok and not strm.trailersSent:
           await failSilently strm.sendTrailers(stcDeadlineEx)
           await failSilently strm.sendNoError()
-          await failSilently rpcFut
+          #await failSilently rpcFut
           # XXX terminate rpcFut so it stops recv
           # XXX send+recv ping to make sure the client recv the rst
           # XXX consume recv until ping is done
