@@ -14,3 +14,9 @@ requires "zippy >= 0.10.14"
 
 #task test, "Test":
 #  exec "nim c -r src/grpc.nim"
+
+task interopserve, "Interop serve":
+  exec "nim c -r tests/interop/testserver.nim"
+
+task interoptest, "Interop test":
+  exec "nim c -r tests/interop/testclient.nim"
