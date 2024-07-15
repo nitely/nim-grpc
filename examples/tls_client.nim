@@ -15,15 +15,18 @@ proc main() {.async.} =
       with stream:
         await stream.sendMessage(HelloRequest(name: "you"))
         let reply = await stream.recvMessage(HelloReply)
-        echo reply.message
+        doAssert reply.message == "Hello, you"
     block:
       echo "Stream reply"
       let stream = client.newGrpcStream("/helloworld.Greeter/SayHelloStreamReply")
       with stream:
         await stream.sendMessage(HelloRequest(name: "you"))
+        var i = 0
         whileRecvMessages stream:
           let reply = await stream.recvMessage(HelloReply)
-          echo reply.message
+          doAssert reply.message == "Hello, you " & $i
+          inc i
+        doAssert i == 3
     block:
       echo "Bidirectional stream"
       let stream = client.newGrpcStream("/helloworld.Greeter/SayHelloBidiStream")
@@ -31,6 +34,6 @@ proc main() {.async.} =
         for i in 0 .. 2:
           await stream.sendMessage(HelloRequest(name: "count " & $i))
           let reply = await stream.recvMessage(HelloReply)
-          echo reply.message
+          doAssert reply.message == "Hello, count " & $i
 
 waitFor main()
