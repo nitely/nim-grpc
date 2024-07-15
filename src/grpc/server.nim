@@ -21,8 +21,7 @@ export
   sendHeaders,
   protobuf
 
-# XXX change name or move to clientserver
-template with*(strm: GrpcStream, body: untyped): untyped =
+template with(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtServer
   with strm.stream:
     block:

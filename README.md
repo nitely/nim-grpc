@@ -3,12 +3,24 @@
 Pure Nim [gRPC](https://grpc.io) implementation.
 It works on top of [hyperx](https://github.com/nitely/nim-hyperx).
 
-> [!NOTE]
-> Beware this lib is in its infancy.
+## Install
+
+```
+nimble install grpc
+```
 
 ## Compatibility
 
 > Nim +2.0
+
+## Requirements
+
+- OpenSSL
+
+## Debugging
+
+The `-d:grpcDebug` define will print debugging
+messages and error traces
 
 ## ToDo
 
