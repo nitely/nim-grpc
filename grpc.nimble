@@ -15,6 +15,12 @@ requires "zippy >= 0.10.14"
 #task test, "Test":
 #  exec "nim c -r src/grpc.nim"
 
+task exampleserve, "Example serve":
+  exec "nim c -r examples/tls_server.nim"
+
+task exampleclient, "Example client":
+  exec "nim c -r examples/tls_client.nim"
+
 task interopserve, "Interop serve":
   exec "nim c -r tests/interop/testserver.nim"
 

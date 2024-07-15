@@ -5,7 +5,6 @@ import std/asyncdispatch
 import std/tables
 
 import ../src/grpc/server
-import ../src/grpc/utils
 import ./pbtypes
 
 const localHost = "127.0.0.1"
@@ -19,12 +18,27 @@ proc sayHello(strm: GrpcStream) {.async.} =
     HelloReply(message: "Hello, " & request.name)
   )
 
-when isMainModule:
-  proc main() {.async.} =
-    echo "Serving forever"
-    let server = newServer(localHost, localPort, certFile, keyFile)
-    await server.serve({
-      "/helloworld.Greeter/SayHello": sayHello.GrpcCallback
-    }.newtable)
-  waitFor main()
-  echo "ok"
+proc sayHelloStreamReply(strm: GrpcStream) {.async.} =
+  let request = await strm.recvMessage(HelloRequest)
+  for i in 0 .. 2:
+    await strm.sendMessage(
+      HelloReply(message: "Hello, " & request.name & " " & $i)
+    )
+
+proc sayHelloBidiStream(strm: GrpcStream) {.async.} =
+  whileRecvMessages strm:
+    let request = await strm.recvMessage(HelloRequest)
+    await strm.sendMessage(
+      HelloReply(message: "Hello, " & request.name)
+    )
+
+proc main() {.async.} =
+  echo "Serving forever"
+  let server = newServer(localHost, localPort, certFile, keyFile)
+  await server.serve({
+    "/helloworld.Greeter/SayHello": sayHello.GrpcCallback,
+    "/helloworld.Greeter/SayHelloStreamReply": sayHelloStreamReply.GrpcCallback,
+    "/helloworld.Greeter/SayHelloBidiStream": sayHelloBidiStream.GrpcCallback,
+  }.newtable)
+
+waitFor main()

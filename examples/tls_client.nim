@@ -3,23 +3,7 @@
 import std/asyncdispatch
 
 import ../src/grpc/client
-import ../src/grpc/utils
 import ./pbtypes
-
-proc sayHello(client: ClientContext): GrpcStream =
-  client.newGrpcStream(
-    "/helloworld.Greeter/SayHello"
-  )
-
-proc sayHelloStreamReply(client: ClientContext): GrpcStream =
-  client.newGrpcStream(
-    "/helloworld.Greeter/SayHelloStreamReply"
-  )
-
-proc sayHelloBidiStream(client: ClientContext): GrpcStream =
-  client.newGrpcStream(
-    "/helloworld.Greeter/SayHelloBidiStream"
-  )
 
 proc main() {.async.} =
   #var client = newClient("127.0.0.1", Port 50051)
@@ -27,28 +11,26 @@ proc main() {.async.} =
   with client:
     block:
       echo "Simple request"
-      let stream = client.sayHello()
+      let stream = client.newGrpcStream("/helloworld.Greeter/SayHello")
       with stream:
         await stream.sendMessage(HelloRequest(name: "you"))
         let reply = await stream.recvMessage(HelloReply)
         echo reply.message
-    when false:
+    block:
       echo "Stream reply"
-      let stream = client.sayHelloStreamReply()
+      let stream = client.newGrpcStream("/helloworld.Greeter/SayHelloStreamReply")
       with stream:
-        let request = HelloRequest(name: "you")
-        await stream.helloRequest(request, finish = true)
-        while not stream.recvEnded:
-          let reply = await stream.helloReply()
+        await stream.sendMessage(HelloRequest(name: "you"))
+        whileRecvMessages stream:
+          let reply = await stream.recvMessage(HelloReply)
           echo reply.message
-    when false:
+    block:
       echo "Bidirectional stream"
-      let stream = client.sayHelloBidiStream()
+      let stream = client.newGrpcStream("/helloworld.Greeter/SayHelloBidiStream")
       with stream:
         for i in 0 .. 2:
-          let request = HelloRequest(name: "count " & $i)
-          await stream.helloRequest(request)
-          let reply = await stream.helloReply()
+          await stream.sendMessage(HelloRequest(name: "count " & $i))
+          let reply = await stream.recvMessage(HelloReply)
           echo reply.message
 
 waitFor main()
