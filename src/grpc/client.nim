@@ -47,6 +47,11 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         check recvData[].len == 0
         check strm.recvEnded
         check not recved
+  except GrpcRemoteFailure:
+    # grpc-go server sends Rst no_error but trailer status is ok
+    debugInfo getCurrentException().getStackTrace()
+    debugInfo getCurrentException().msg
+    discard
   except GrpcFailure as err:
     failure = true
     failureCode = err.code

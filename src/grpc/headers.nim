@@ -68,7 +68,7 @@ func toMillis(tt: int, unit: char): int {.raises: [GrpcFailure].} =
   of 'S':
     check tt < int.high div 1000, newGrpcFailure()
     tt * 1000
-  of 's':
+  of 'm':
     tt
   of 'u':
     if tt <= 1000: 1 else: tt div 1000
@@ -78,11 +78,10 @@ func toMillis(tt: int, unit: char): int {.raises: [GrpcFailure].} =
     doAssert false; 0
 
 func parseTimeout(raw: openArray[char]): int {.raises: [GrpcFailure].} =
-  check raw.len in 3 .. 10, newGrpcFailure()
-  check raw[^1] in {'H', 'M', 'S', 's', 'u', 'n'}, newGrpcFailure()
-  check raw[^2] == ' ', newGrpcFailure()
+  check raw.len in 2 .. 10, newGrpcFailure()
+  check raw[^1] in {'H', 'M', 'S', 'm', 'u', 'n'}, newGrpcFailure()
   var timeout = 0
-  for i in 0 .. raw.len-3:
+  for i in 0 .. raw.len-2:
     if raw[i].ord in '0'.ord .. '9'.ord:
       timeout = timeout * 10 + (raw[i].ord - '0'.ord)
     else:

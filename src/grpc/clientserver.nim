@@ -101,7 +101,7 @@ func `$`(typ: GrpcTimeoutUnit): char =
   of grpcHour: 'H'
   of grpcMinute: 'M'
   of grpcSecond: 'S'
-  of grpcMsec: 's'
+  of grpcMsec: 'm'
   of grpcUsec: 'u'
   of grpcNsec: 'n'
 
@@ -120,7 +120,7 @@ func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
       ("content-type", "application/grpc+proto")
     ]
     if strm.timeout > 0:
-      headers.add ("grpc-timeout", $strm.timeout & ' ' & $strm.timeoutUnit)
+      headers.add ("grpc-timeout", $strm.timeout & $strm.timeoutUnit)
     newSeqRef(headers)
   of gtServer:
     newSeqRef(@[
@@ -145,6 +145,10 @@ proc sendMessage*(
   if not strm.headersSent:
     await strm.sendHeaders()
   tryHyperx await strm.stream.sendBody(data, finish)
+
+proc sendEnd*(strm: GrpcStream) {.async.} =
+  doAssert not strm.stream.sendEnded
+  await strm.sendMessage(newStringRef(), finish = true)
 
 proc sendCancel*(strm: GrpcStream) {.async.} =
   tryHyperx await strm.stream.sendRst(errCancel)
@@ -179,10 +183,6 @@ proc sendMessage*[T](
   strm: GrpcStream, msg: T, finish = false, compress = false
 ) {.async.} =
   await strm.sendMessage(msg.pbEncode(compress), finish = finish)
-
-proc sendEnd*(strm: GrpcStream) {.async.} =
-  doAssert not strm.stream.sendEnded
-  await strm.sendMessage(newStringRef(), finish = true)
 
 proc failSilently*(fut: Future[void]) {.async.} =
   try:
