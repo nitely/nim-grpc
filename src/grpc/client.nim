@@ -28,7 +28,6 @@ export
   GrpcTimeoutUnit,
   protobuf
 
-# XXX no API should raise hyperx errors
 template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient
   var failure = false
@@ -39,6 +38,8 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         body
       # XXX cancel stream if not recvEnded, and error out
       # XXX send/recv trailers
+      if strm.canceled:
+        raise newGrpcFailure(stcCancelled)
       if not strm.stream.sendEnded:
         await strm.sendMessage(newStringRef(), finish = true)
       if not strm.recvEnded:
@@ -55,6 +56,8 @@ template with*(strm: GrpcStream, body: untyped): untyped =
   except GrpcFailure as err:
     failure = true
     failureCode = err.code
+    if strm.canceled:
+      raise err
   except HyperxError:
     debugInfo getCurrentException().getStackTrace()
     debugInfo getCurrentException().msg

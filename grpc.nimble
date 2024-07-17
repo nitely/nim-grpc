@@ -25,4 +25,4 @@ task interopserve, "Interop serve":
   exec "nim c -r tests/interop/testserver.nim"
 
 task interoptest, "Interop test":
-  exec "nim c -r tests/interop/testclient.nim"
+  exec "nim c -r -d:grpcTestCompression tests/interop/testclient.nim"

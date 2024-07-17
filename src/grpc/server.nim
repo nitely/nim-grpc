@@ -67,6 +67,7 @@ proc processStream(
   with strm:
     tryHyperx await strm.stream.recvHeaders(strm.headers)
     let reqHeaders = toRequestHeaders strm.headers[]
+    strm.compress = reqHeaders.compress
     if reqHeaders.path notin routes:
       await strm.sendTrailers(stcNotFound)
       await strm.sendNoError()
@@ -87,9 +88,9 @@ proc processStream(
       else:
         await routes[reqHeaders.path](strm)
     except GrpcRemoteFailure as err:
-      if not strm.trailersSent:
-        await failSilently strm.sendTrailers(stcCancelled)
-        await failSilently strm.sendNoError()
+      #if not strm.trailersSent:
+      #  await failSilently strm.sendTrailers(stcCancelled)
+      #  await failSilently strm.sendNoError()
       raise err
     except GrpcFailure as err:
       if not strm.trailersSent:

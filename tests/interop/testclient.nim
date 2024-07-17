@@ -14,6 +14,8 @@ import ../../src/grpc/client
 import ../../src/grpc/errors
 import ./pbtypes
 
+const testCompression = defined(grpcTestCompression)
+
 template testAsync(name: string, body: untyped): untyped =
   (proc () = 
     echo "test " & name
@@ -61,86 +63,88 @@ testAsync "large_unary":
       checked = true
   doAssert checked
 
-testAsync "client_compressed_unary":
-  var checked = 0
-  var client = newClient(localHost, localPort)
-  with client:
-    try:
-      let stream = client.newGrpcStream(unaryCallPath)
-      with stream:
-        await stream.sendMessage(
-          SimpleRequest(
-            expectCompressed: boolTrue,
-            responseSize: 314159,
-            payload: Payload(body: newSeq[byte](271828))
-          ),
-          compress = false
-        )
-        # XXX should raise GrpcResponseError here instead of w/e this raises
-        discard await stream.recvMessage(SimpleResponse)
-        doAssert false
-    except GrpcResponseError as err:
-      doAssert err.code == stcInvalidArg
-      inc checked
-    block:
-      let stream = client.newGrpcStream(unaryCallPath)
-      with stream:
-        await stream.sendMessage(
-          SimpleRequest(
-            expectCompressed: boolFalse,
-            responseSize: 314159,
-            payload: Payload(body: newSeq[byte](271828))
-          ),
-          compress = false
-        )
-        let reply = await stream.recvMessage(SimpleResponse)
-        doAssert reply.payload.body.len == 314159
+when testCompression:
+  testAsync "client_compressed_unary":
+    var checked = 0
+    var client = newClient(localHost, localPort)
+    with client:
+      try:
+        let stream = client.newGrpcStream(unaryCallPath)
+        with stream:
+          await stream.sendMessage(
+            SimpleRequest(
+              expectCompressed: boolTrue,
+              responseSize: 314159,
+              payload: Payload(body: newSeq[byte](271828))
+            ),
+            compress = false
+          )
+          # XXX should raise GrpcResponseError here instead of w/e this raises
+          discard await stream.recvMessage(SimpleResponse)
+          doAssert false
+      except GrpcResponseError as err:
+        doAssert err.code == stcInvalidArg
         inc checked
-    block:
-      let stream = client.newGrpcStream(unaryCallPath)
-      with stream:
-        await stream.sendMessage(
-          SimpleRequest(
-            expectCompressed: boolTrue,
-            responseSize: 314159,
-            payload: Payload(body: newSeq[byte](271828))
-          ),
-          compress = true
-        )
-        let reply = await stream.recvMessage(SimpleResponse)
-        doAssert reply.payload.body.len == 314159
-        inc checked
-  doAssert checked == 3
+      block:
+        let stream = client.newGrpcStream(unaryCallPath)
+        with stream:
+          await stream.sendMessage(
+            SimpleRequest(
+              expectCompressed: boolFalse,
+              responseSize: 314159,
+              payload: Payload(body: newSeq[byte](271828))
+            ),
+            compress = false
+          )
+          let reply = await stream.recvMessage(SimpleResponse)
+          doAssert reply.payload.body.len == 314159
+          inc checked
+      block:
+        let stream = client.newGrpcStream(unaryCallPath, compress = true)
+        with stream:
+          await stream.sendMessage(
+            SimpleRequest(
+              expectCompressed: boolTrue,
+              responseSize: 314159,
+              payload: Payload(body: newSeq[byte](271828))
+            ),
+            compress = true
+          )
+          let reply = await stream.recvMessage(SimpleResponse)
+          doAssert reply.payload.body.len == 314159
+          inc checked
+    doAssert checked == 3
 
-testAsync "server_compressed_unary":
-  var checked = 0
-  var client = newClient(localHost, localPort)
-  with client:
-    block:
-      let stream = client.newGrpcStream(unaryCallPath)
-      with stream:
-        await stream.sendMessage(SimpleRequest(
-          responseCompressed: boolTrue,
-          responseSize: 314159,
-          payload: Payload(body: newSeq[byte](271828))
-        ))
-        let (compressed, reply) = await stream.recvMessage2(SimpleResponse)
-        doAssert compressed
-        doAssert reply.payload.body.len == 314159
-        inc checked
-    block:
-      let stream = client.newGrpcStream(unaryCallPath)
-      with stream:
-        await stream.sendMessage(SimpleRequest(
-          responseCompressed: boolFalse,
-          responseSize: 314159,
-          payload: Payload(body: newSeq[byte](271828))
-        ))
-        let (compressed, reply) = await stream.recvMessage2(SimpleResponse)
-        doAssert not compressed
-        doAssert reply.payload.body.len == 314159
-        inc checked
-  doAssert checked == 2
+when testCompression:
+  testAsync "server_compressed_unary":
+    var checked = 0
+    var client = newClient(localHost, localPort)
+    with client:
+      block:
+        let stream = client.newGrpcStream(unaryCallPath)
+        with stream:
+          await stream.sendMessage(SimpleRequest(
+            responseCompressed: boolTrue,
+            responseSize: 314159,
+            payload: Payload(body: newSeq[byte](271828))
+          ))
+          let (compressed, reply) = await stream.recvMessage2(SimpleResponse)
+          doAssert compressed
+          doAssert reply.payload.body.len == 314159
+          inc checked
+      block:
+        let stream = client.newGrpcStream(unaryCallPath)
+        with stream:
+          await stream.sendMessage(SimpleRequest(
+            responseCompressed: boolFalse,
+            responseSize: 314159,
+            payload: Payload(body: newSeq[byte](271828))
+          ))
+          let (compressed, reply) = await stream.recvMessage2(SimpleResponse)
+          doAssert not compressed
+          doAssert reply.payload.body.len == 314159
+          inc checked
+    doAssert checked == 2
 
 const streamingInputCallPath = "/grpc.testing.TestService/StreamingInputCall"
 
@@ -163,46 +167,47 @@ testAsync "client_streaming":
       checked = true
   doAssert checked
 
-testAsync "client_compressed_streaming":
-  var checked = 0
-  var client = newClient(localHost, localPort)
-  with client:
-    try:
-      let stream = client.newGrpcStream(streamingInputCallPath)
-      with stream:
-        await stream.sendMessage(
-          StreamingInputCallRequest(
-            expectCompressed: boolTrue,
-            payload: Payload(body: newSeq[byte](27182))
-          ),
-          finish = true
-        )
-        discard await stream.recvMessage(StreamingInputCallResponse)
-        doAssert false
-    except GrpcResponseError as err:
-      doAssert err.code == stcInvalidArg
-      inc checked
-    block:
-      let stream = client.newGrpcStream(streamingInputCallPath)
-      with stream:
-        await stream.sendMessage(
-          StreamingInputCallRequest(
-            expectCompressed: boolTrue,
-            payload: Payload(body: newSeq[byte](27182))
-          ),
-          compress = true
-        )
-        await stream.sendMessage(
-          StreamingInputCallRequest(
-            expectCompressed: boolFalse,
-            payload: Payload(body: newSeq[byte](45904))
-          ),
-          finish = true
-        )
-        let reply = await stream.recvMessage(StreamingInputCallResponse)
-        doAssert reply.aggregatedPayloadSize == 73086
+when testCompression:
+  testAsync "client_compressed_streaming":
+    var checked = 0
+    var client = newClient(localHost, localPort)
+    with client:
+      try:
+        let stream = client.newGrpcStream(streamingInputCallPath, compress = true)
+        with stream:
+          await stream.sendMessage(
+            StreamingInputCallRequest(
+              expectCompressed: boolTrue,
+              payload: Payload(body: newSeq[byte](27182))
+            ),
+            finish = true
+          )
+          discard await stream.recvMessage(StreamingInputCallResponse)
+          doAssert false
+      except GrpcResponseError as err:
+        doAssert err.code == stcInvalidArg
         inc checked
-  doAssert checked == 2
+      block:
+        let stream = client.newGrpcStream(streamingInputCallPath, compress = true)
+        with stream:
+          await stream.sendMessage(
+            StreamingInputCallRequest(
+              expectCompressed: boolTrue,
+              payload: Payload(body: newSeq[byte](27182))
+            ),
+            compress = true
+          )
+          await stream.sendMessage(
+            StreamingInputCallRequest(
+              expectCompressed: boolFalse,
+              payload: Payload(body: newSeq[byte](45904))
+            ),
+            finish = true
+          )
+          let reply = await stream.recvMessage(StreamingInputCallResponse)
+          doAssert reply.aggregatedPayloadSize == 73086
+          inc checked
+    doAssert checked == 2
 
 const streamingOutputCall = "/grpc.testing.TestService/StreamingOutputCall"
 
@@ -228,29 +233,30 @@ testAsync "server_streaming":
       inc checked
   doAssert checked == 1
 
-testAsync "server_compressed_streaming":
-  var checked = 0
-  var client = newClient(localHost, localPort)
-  with client:
-    let stream = client.newGrpcStream(streamingOutputCall)
-    with stream:
-      await stream.sendMessage(StreamingOutputCallRequest(
-        responseParameters: @[
-          ResponseParameters(size: 31415, compressed: boolTrue),
-          ResponseParameters(size: 92653, compressed: boolFalse),
-        ]
-      ))
-      var sizes = newSeq[int]()
-      var compr = newSeq[bool]()
-      whileRecvMessages stream:
-        let (compressed, request) =
-          await stream.recvMessage2(StreamingOutputCallResponse)
-        sizes.add request.payload.body.len
-        compr.add compressed
-      doAssert sizes == @[31415, 92653]
-      doAssert compr == @[true, false]
-      inc checked
-  doAssert checked == 1
+when testCompression:
+  testAsync "server_compressed_streaming":
+    var checked = 0
+    var client = newClient(localHost, localPort)
+    with client:
+      let stream = client.newGrpcStream(streamingOutputCall)
+      with stream:
+        await stream.sendMessage(StreamingOutputCallRequest(
+          responseParameters: @[
+            ResponseParameters(size: 31415, compressed: boolTrue),
+            ResponseParameters(size: 92653, compressed: boolFalse),
+          ]
+        ))
+        var sizes = newSeq[int]()
+        var compr = newSeq[bool]()
+        whileRecvMessages stream:
+          let (compressed, request) =
+            await stream.recvMessage2(StreamingOutputCallResponse)
+          sizes.add request.payload.body.len
+          compr.add compressed
+        doAssert sizes == @[31415, 92653]
+        doAssert compr == @[true, false]
+        inc checked
+    doAssert checked == 1
 
 const fullDuplexCallPath = "/grpc.testing.TestService/FullDuplexCall"
 
@@ -442,9 +448,8 @@ testAsync "cancel_after_begin":
       with stream:
         await stream.sendHeaders()
         await stream.sendCancel()
-        # note recvMessage should usually be called here until
-        # server actually cancels
-    except GrpcResponseError as err:
+        # XXX wait server to actually cancel somehow
+    except GrpcFailure as err:
       doAssert err.code == stcCancelled, $err.code
       inc checked
   doAssert checked == 1
@@ -466,7 +471,7 @@ testAsync "cancel_after_first_response":
         doAssert reply.payload.body.len == 31415
         await stream.sendCancel()
         inc checked
-    except GrpcResponseError as err:
+    except GrpcFailure as err:
       doAssert err.code == stcCancelled, $err.code
       inc checked
   doAssert checked == 2

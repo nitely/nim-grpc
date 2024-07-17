@@ -19,9 +19,11 @@ type GrpcStream* = ref object
   path*: ref string
   timeout*: int
   timeoutUnit*: GrpcTimeoutUnit
+  compress*: bool
   headers*: ref string
   headersSent*: bool  # XXX state
   trailersSent*: bool  # XXX state
+  canceled*: bool
   buff: ref string
 
 proc newGrpcStream(
@@ -29,13 +31,15 @@ proc newGrpcStream(
   stream: ClientStream,
   path = "",
   timeout = 0,
-  timeoutUnit = grpcMsec
+  timeoutUnit = grpcMsec,
+  compress = false
 ): GrpcStream =
   doAssert timeout < 100_000_000
   GrpcStream(
     typ: typ,
     stream: stream,
     path: newStringRef(path),
+    compress: compress,
     timeout: timeout,
     timeoutUnit: timeoutUnit,
     headers: newStringRef(),
@@ -50,11 +54,12 @@ proc newGrpcStream*(
   client: ClientContext,
   path: string,
   timeout = 0,
-  timeoutUnit = grpcMsec
+  timeoutUnit = grpcMsec,
+  compress = false
 ): GrpcStream =
   ## Client stream
   newGrpcStream(
-    gtClient, newClientStream(client), path, timeout, timeoutUnit
+    gtClient, newClientStream(client), path, timeout, timeoutUnit, compress
   )
 
 proc recvEnded*(strm: GrpcStream): bool =
@@ -114,21 +119,24 @@ func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
       (":path", strm.path[]),
       (":authority", strm.stream.client.hostname),
       ("te", "trailers"),
-      ("grpc-encoding", "gzip"),  # XXX conf for identity
       ("grpc-accept-encoding", "identity, gzip, deflate"),
       ("user-agent", "grpc-nim/0.1.0"),
       ("content-type", "application/grpc+proto")
     ]
+    if strm.compress:
+      headers.add ("grpc-encoding", "gzip")
     if strm.timeout > 0:
       headers.add ("grpc-timeout", $strm.timeout & $strm.timeoutUnit)
     newSeqRef(headers)
   of gtServer:
-    newSeqRef(@[
+    var headers = @[
       (":status", "200"),
-      ("grpc-encoding", "gzip"),  # XXX conf for identity
-      #("grpc-accept-encoding", "identity, gzip, deflate"),
+      ("grpc-accept-encoding", "identity, gzip, deflate"),
       ("content-type", "application/grpc+proto")
-    ])
+    ]
+    if strm.compress:
+      headers.add ("grpc-encoding", "gzip")
+    newSeqRef(headers)
 
 proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
   doAssert not strm.headersSent
@@ -151,6 +159,8 @@ proc sendEnd*(strm: GrpcStream) {.async.} =
   await strm.sendMessage(newStringRef(), finish = true)
 
 proc sendCancel*(strm: GrpcStream) {.async.} =
+  # XXX maybe just raise cancel error here
+  strm.canceled = true
   tryHyperx await strm.stream.sendRst(errCancel)
 
 proc sendNoError*(strm: GrpcStream) {.async.} =
@@ -182,7 +192,12 @@ template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =
 proc sendMessage*[T](
   strm: GrpcStream, msg: T, finish = false, compress = false
 ) {.async.} =
-  await strm.sendMessage(msg.pbEncode(compress), finish = finish)
+  if strm.typ == gtClient and compress:
+    doAssert strm.compress, "stream compression is not enabled"
+  await strm.sendMessage(
+    msg.pbEncode(compress and strm.compress),
+    finish = finish
+  )
 
 proc failSilently*(fut: Future[void]) {.async.} =
   try:

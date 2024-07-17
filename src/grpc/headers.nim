@@ -78,7 +78,7 @@ func toMillis(tt: int, unit: char): int {.raises: [GrpcFailure].} =
     doAssert false; 0
 
 func parseTimeout(raw: openArray[char]): int {.raises: [GrpcFailure].} =
-  check raw.len in 2 .. 10, newGrpcFailure()
+  check raw.len in 2 .. 9, newGrpcFailure()
   check raw[^1] in {'H', 'M', 'S', 'm', 'u', 'n'}, newGrpcFailure()
   var timeout = 0
   for i in 0 .. raw.len-2:
@@ -91,9 +91,10 @@ func parseTimeout(raw: openArray[char]): int {.raises: [GrpcFailure].} =
 type RequestHeaders* = ref object
   path*: string
   timeout*: int
+  compress*: bool
 
 func newRequestHeaders(): RequestHeaders =
-  RequestHeaders(path: "", timeout: 0)
+  RequestHeaders(path: "", timeout: 0, compress: false)
 
 func toRequestHeaders*(s: string): RequestHeaders {.raises: [GrpcFailure].} =
   result = newRequestHeaders()
@@ -102,3 +103,8 @@ func toRequestHeaders*(s: string): RequestHeaders {.raises: [GrpcFailure].} =
       result.path = s[vv.a .. vv.b]
     elif toOpenArray(s, nn.a, nn.b) == "grpc-timeout":
       result.timeout = parseTimeout toOpenArray(s, vv.a, vv.b)
+    elif toOpenArray(s, nn.a, nn.b) == "grpc-encoding":
+      result.compress = toOpenArray(s, vv.a, vv.b) == "gzip"
+    elif toOpenArray(s, nn.a, nn.b) == "grpc-accept-encoding":
+      #result.compress = "gzip" in toOpenArray(s, vv.a, vv.b)
+      result.compress = "gzip" in s[vv.a .. vv.b]
