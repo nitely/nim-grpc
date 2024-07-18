@@ -39,3 +39,31 @@ jobs:
           (nimble exampleserve &) && \
           sleep 10s && \
           nimble exampleclient"
+    - name: Run Go server interop tests
+      run: |
+        docker pull nimlang/nim:${{ matrix.nim }}
+        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
+        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
+          apt update && \
+          apt install -y make && \ 
+          make install_mkcert && \
+          nimble install -y && \
+          curl -JLO \"https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_server\" && \
+          chmod +x ./go_server && \
+          (nimble gointeropserve &) && \
+          sleep 10s && \
+          nimble interoptest2"
+    - name: Run Go client interop tests
+      run: |
+        docker pull nimlang/nim:${{ matrix.nim }}
+        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
+        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
+          apt update && \
+          apt install -y make && \ 
+          make install_mkcert && \
+          nimble install -y && \
+          curl -JLO \"https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_client\" && \
+          chmod +x ./go_client && \
+          (nimble interopserve &) && \
+          sleep 10s && \
+          nimble gointeroptest"

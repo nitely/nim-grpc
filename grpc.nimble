@@ -26,3 +26,31 @@ task interopserve, "Interop serve":
 
 task interoptest, "Interop test":
   exec "nim c -r -d:grpcTestCompression tests/interop/testclient.nim"
+
+task interoptest2, "Interop test without compression":
+  # go server does not support compression tests
+  exec "nim c -r tests/interop/testclient.nim"
+
+task gointeropserve, "Go interop serve":
+  # GRPC_GO_LOG_SEVERITY_LEVEL=info
+  echo "Go serve forever"
+  exec "./go_server --use_tls --tls_cert_file $HYPERX_TEST_CERTFILE --tls_key_file $HYPERX_TEST_KEYFILE --port 4443"
+
+task gointeroptest, "Go interop test":
+  template goTest(testName: string): untyped =
+    echo "Go test: " & testName
+    exec "./go_client --use_tls --server_port 4443 --test_case " & testName
+  goTest "empty_unary"
+  goTest "large_unary"
+  goTest "client_streaming"
+  goTest "server_streaming"
+  goTest "ping_pong"
+  goTest "empty_stream"
+  goTest "custom_metadata"
+  goTest "status_code_and_message"
+  goTest "special_status_message"
+  goTest "unimplemented_method"
+  goTest "unimplemented_service"
+  goTest "cancel_after_begin"
+  goTest "cancel_after_first_response"
+  goTest "timeout_on_sleeping_server"

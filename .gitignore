@@ -3,3 +3,5 @@ examples/tls_client
 examples/tls_server
 tests/interop/testserver
 tests/interop/testclient
+go_server
+go_client

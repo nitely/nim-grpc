@@ -2,6 +2,7 @@
 
 Pure Nim [gRPC](https://grpc.io) implementation.
 It works on top of [hyperx](https://github.com/nitely/nim-hyperx).
+Tested with go-grpc sever/client interop tests.
 
 ## Install
 
