@@ -2,20 +2,12 @@ import ./statuscodes
 export statuscodes
 
 type
-  GrpcError* = object of CatchableError
-  GrpcFailure* = object of GrpcError
+  GrpcFailure* = object of CatchableError
     code*: StatusCode
     message*: string
   GrpcRemoteFailure* = object of GrpcFailure
   GrpcNoMessageException* = object of GrpcFailure
-  GrpcResponseError* = object of GrpcError
-    code*: StatusCode
-    message*: string
-
-func newGrpcResponseError*(
-  code: StatusCode, message: string
-): ref GrpcResponseError {.raises: [].} =
-  result = (ref GrpcResponseError)(msg: code.name, code: code, message: message)
+  GrpcResponseError* = object of GrpcRemoteFailure
 
 func newGrpcFailure*(
   code: StatusCode, message = ""
@@ -36,3 +28,8 @@ func newGrpcNoMessageException*(): ref GrpcNoMessageException {.raises: [].} =
     code: stcInternal,
     message: "A message was expected"
   )
+
+func newGrpcResponseError*(
+  code: StatusCode, message: string
+): ref GrpcResponseError {.raises: [].} =
+  result = (ref GrpcResponseError)(msg: code.name, code: code, message: message)

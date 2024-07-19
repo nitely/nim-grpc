@@ -4,7 +4,7 @@ from std/os import getEnv
 import std/asyncdispatch
 import std/tables
 
-import ../src/grpc/server
+import ../src/grpc
 import ./pbtypes
 
 const localHost = "127.0.0.1"

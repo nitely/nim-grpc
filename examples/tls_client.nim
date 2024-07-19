@@ -2,7 +2,7 @@
 
 import std/asyncdispatch
 
-import ../src/grpc/client
+import ../src/grpc
 import ./pbtypes
 
 proc main() {.async.} =

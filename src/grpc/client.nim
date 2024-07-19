@@ -28,8 +28,35 @@ export
   GrpcTimeoutUnit,
   protobuf
 
+proc ended(strm: GrpcStream): bool =
+  result = strm.recvEnded and strm.stream.sendEnded
+
+func timeoutMillis(strm: GrpcStream): int {.raises: [].} =
+  template tt: untyped = strm.timeout
+  case strm.timeoutUnit
+  of grpcHour: tt * 3600000
+  of grpcMinute: tt * 60000
+  of grpcSecond: tt * 1000
+  of grpcMsec: tt
+  of grpcUsec:
+    if tt <= 1000: 1 else: tt div 1000
+  of grpcNsec:
+    if tt <= 1_000_000: 1 else: tt div 1_000_000
+
+proc deadlineTask(strm: GrpcStream) {.async.} =
+  ## Meant to be asyncCheck'd
+  doAssert strm.timeout > 0
+  var timeLeft = strm.timeoutMillis()
+  let ms = min(timeLeft, 500)
+  while timeLeft > 0 and not strm.ended:
+    await sleepAsync(min(timeLeft, ms))
+    timeLeft -= ms
+  strm.deadlineEx = not strm.ended
+
 template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient
+  if strm.timeout > 0:
+    asyncCheck deadlineTask(strm)
   var failure = false
   var failureCode = stcInternal
   try:
@@ -48,6 +75,7 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         check recvData[].len == 0
         check strm.recvEnded
         check not recved
+      doAssert strm.ended
   except GrpcRemoteFailure:
     # grpc-go server sends Rst no_error but trailer status is ok
     debugInfo getCurrentException().getStackTrace()
@@ -57,6 +85,8 @@ template with*(strm: GrpcStream, body: untyped): untyped =
     failure = true
     failureCode = err.code
     if strm.canceled:
+      raise err
+    if strm.deadlineEx:
       raise err
   except HyperxError:
     debugInfo getCurrentException().getStackTrace()

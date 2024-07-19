@@ -24,6 +24,7 @@ type GrpcStream* = ref object
   headersSent*: bool  # XXX state
   trailersSent*: bool  # XXX state
   canceled*: bool
+  deadlineEx*: bool
   buff: ref string
 
 proc newGrpcStream(
@@ -67,6 +68,7 @@ proc recvEnded*(strm: GrpcStream): bool =
 
 proc recvHeaders*(strm: GrpcStream) {.async.} =
   doAssert strm.headers[].len == 0
+  check not strm.deadlineEx, newGrpcFailure stcDeadlineEx
   tryHyperx await strm.stream.recvHeaders(strm.headers)
 
 func recordSize(data: string): int =
@@ -94,6 +96,7 @@ proc recvMessage*(
   if strm.headers[].len == 0:
     await strm.recvHeaders()
   while not strm.stream.recvEnded and not strm.buff[].hasFullRecord:
+    check not strm.deadlineEx, newGrpcFailure stcDeadlineEx
     tryHyperx await strm.stream.recvBody(strm.buff)
   check strm.buff[].hasFullRecord or strm.buff[].len == 0
   let L = strm.buff[].recordSize
@@ -152,6 +155,7 @@ proc sendMessage*(
   doAssert not strm.stream.sendEnded
   if not strm.headersSent:
     await strm.sendHeaders()
+  check not strm.deadlineEx, newGrpcFailure stcDeadlineEx
   tryHyperx await strm.stream.sendBody(data, finish)
 
 proc sendEnd*(strm: GrpcStream) {.async.} =

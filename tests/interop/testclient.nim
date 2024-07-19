@@ -483,7 +483,7 @@ testAsync "timeout_on_sleeping_server":
     try:
       let stream = client.newGrpcStream(
         fullDuplexCallPath,
-        timeout = 100,
+        timeout = 1,
         timeoutUnit = grpcMsec
       )
       with stream:
@@ -492,7 +492,9 @@ testAsync "timeout_on_sleeping_server":
         ))
         whileRecvMessages stream:
           discard await stream.recvMessage(StreamingOutputCallResponse)
-    except GrpcResponseError as err:
+    except GrpcFailure as err:
       doAssert err.code == stcDeadlineEx, $err.code
       inc checked
   doAssert checked == 1
+  # let deadline task finish
+  await sleepAsync(100)
