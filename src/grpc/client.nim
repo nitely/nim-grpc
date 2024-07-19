@@ -28,9 +28,6 @@ export
   GrpcTimeoutUnit,
   protobuf
 
-proc ended(strm: GrpcStream): bool =
-  result = strm.recvEnded and strm.stream.sendEnded
-
 func timeoutMillis(strm: GrpcStream): int {.raises: [].} =
   template tt: untyped = strm.timeout
   case strm.timeoutUnit
@@ -52,6 +49,10 @@ proc deadlineTask(strm: GrpcStream) {.async.} =
     await sleepAsync(min(timeLeft, ms))
     timeLeft -= ms
   strm.deadlineEx = not strm.ended
+  if strm.deadlineEx:
+    if strm.headersSent:  # not idle; client only
+      await failSilently strm.sendCancel()
+      strm.cancel()
 
 template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient
@@ -75,23 +76,24 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         check recvData[].len == 0
         check strm.recvEnded
         check not recved
-      doAssert strm.ended
   except GrpcRemoteFailure:
     # grpc-go server sends Rst no_error but trailer status is ok
     debugInfo getCurrentException().getStackTrace()
     debugInfo getCurrentException().msg
     discard
   except GrpcFailure as err:
-    failure = true
-    failureCode = err.code
+    if strm.deadlineEx:
+      raise newGrpcFailure(stcDeadlineEx)
     if strm.canceled:
       raise err
-    if strm.deadlineEx:
-      raise err
+    failure = true
+    failureCode = err.code
   except HyperxError:
     debugInfo getCurrentException().getStackTrace()
     debugInfo getCurrentException().msg
     doAssert false
+  finally:
+    strm.ended = true
   strm.headers[].add strm.stream.recvTrailers
   debugInfo strm.headers[]
   let respHeaders = toResponseHeaders strm.headers[]
