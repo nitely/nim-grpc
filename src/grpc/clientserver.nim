@@ -144,8 +144,8 @@ func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
 
 proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
   doAssert not strm.headersSent
-  check not strm.deadlineEx, newGrpcFailure stcDeadlineEx
   strm.headersSent = true
+  check not strm.deadlineEx, newGrpcFailure stcDeadlineEx
   tryHyperx await strm.stream.sendHeaders(headers, finish = false)
 
 proc sendHeaders*(strm: GrpcStream) {.async.} =
@@ -154,14 +154,12 @@ proc sendHeaders*(strm: GrpcStream) {.async.} =
 proc sendMessage*(
   strm: GrpcStream, data: ref string, finish = false
 ) {.async.} =
-  doAssert not strm.stream.sendEnded
   if not strm.headersSent:
     await strm.sendHeaders()
   check not strm.canceled, newGrpcFailure stcCancelled
   tryHyperx await strm.stream.sendBody(data, finish)
 
 proc sendEnd*(strm: GrpcStream) {.async.} =
-  doAssert not strm.stream.sendEnded
   await strm.sendMessage(newStringRef(), finish = true)
 
 proc sendCancel*(strm: GrpcStream) {.async.} =
