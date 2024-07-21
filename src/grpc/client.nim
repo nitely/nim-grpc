@@ -44,7 +44,7 @@ proc deadlineTask(strm: GrpcStream) {.async.} =
   ## Meant to be asyncCheck'd
   doAssert strm.timeout > 0
   var timeLeft = strm.timeoutMillis()
-  let ms = min(timeLeft, 500)
+  let ms = min(timeLeft, 1000)
   while timeLeft > 0 and not strm.ended:
     await sleepAsync(min(timeLeft, ms))
     timeLeft -= ms

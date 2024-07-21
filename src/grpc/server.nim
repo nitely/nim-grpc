@@ -21,20 +21,6 @@ export
   sendHeaders,
   protobuf
 
-template with(strm: GrpcStream, body: untyped): untyped =
-  doAssert strm.typ == gtServer
-  with strm.stream:
-    block:
-      body
-    if not strm.stream.sendEnded:
-      await strm.sendMessage(newStringRef(), finish = true)
-    if not strm.recvEnded:
-      let recvData = newStringRef()
-      let recved = await strm.recvMessage(recvData)
-      check recvData[].len == 0
-      check strm.recvEnded
-      check not recved
-
 type
   GrpcCallback* = proc(strm: GrpcStream) {.async.}
   GrpcRoutes* = TableRef[string, GrpcCallback]
@@ -47,12 +33,15 @@ func trailersOut*(strm: GrpcStream, status: StatusCode, msg = ""): Headers =
 
 proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
   doAssert strm.typ == gtServer
-  doAssert not strm.stream.sendEnded
-  doAssert not strm.trailersSent
+  check not strm.stream.sendEnded
+  check not strm.trailersSent
   strm.trailersSent = true
+  var headers2 = headers
   if not strm.headersSent:
-    await strm.sendHeaders()
-  tryHyperx await strm.stream.sendHeaders(headers, finish = true)
+    strm.headersSent = true
+    headers2 = strm.headersOut()
+    headers2[].add headers[]
+  tryHyperx await strm.stream.sendHeaders(headers2, finish = true)
 
 proc sendTrailers(strm: GrpcStream, status: StatusCode, msg = "") {.async.} =
   await strm.sendTrailers(strm.trailersOut(status, msg))
@@ -61,36 +50,39 @@ proc sendCancel*(strm: GrpcStream, status: StatusCode) {.async.} =
   await strm.sendTrailers(status)
   await strm.sendCancel()
 
+proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
+  doAssert timeout > 0
+  var timeLeft = timeout
+  let ms = min(timeLeft, 1000)
+  while timeLeft > 0 and not strm.ended:
+    await sleepAsync(min(timeLeft, ms))
+    timeLeft -= ms
+  strm.deadlineEx = not strm.ended
+  if strm.deadlineEx:
+    if not strm.trailersSent:
+      await failSilently strm.sendTrailers(stcDeadlineEx)
+      await failSilently strm.sendCancel()
+      strm.cancel()
+
 proc processStream(
   strm: GrpcStream, routes: GrpcRoutes
 ) {.async.} =
-  with strm:
-    tryHyperx await strm.stream.recvHeaders(strm.headers)
-    let reqHeaders = toRequestHeaders strm.headers[]
-    strm.compress = reqHeaders.compress
-    if reqHeaders.path notin routes:
-      await strm.sendTrailers(stcNotFound)
-      await strm.sendNoError()
-      return
+  with strm.stream:
     try:
-      # XXX replace withTimeout is really bad
+      await strm.recvHeaders()
+      let reqHeaders = toRequestHeaders strm.headers[]
+      strm.compress = reqHeaders.compress
+      check reqHeaders.path in routes, newGrpcFailure stcNotFound
       if reqHeaders.timeout > 0:
-        let rpcFut = routes[reqHeaders.path](strm)
-        let ok = await withTimeout(rpcFut, reqHeaders.timeout)
-        if not ok and not strm.trailersSent:
-          await failSilently strm.sendTrailers(stcDeadlineEx)
-          await failSilently strm.sendNoError()
-          #await failSilently rpcFut
-          # XXX terminate rpcFut so it stops recv
-          # XXX send+recv ping to make sure the client recv the rst
-          # XXX consume recv until ping is done
-          # await failSilently strm.ping()
-      else:
-        await routes[reqHeaders.path](strm)
+        asyncCheck deadlineTask(strm, reqHeaders.timeout)
+      await routes[reqHeaders.path](strm)
+      if not strm.recvEnded:
+        let recvData = newStringRef()
+        let recved = await strm.recvMessage(recvData)
+        check recvData[].len == 0
+        check strm.recvEnded
+        check not recved
     except GrpcRemoteFailure as err:
-      #if not strm.trailersSent:
-      #  await failSilently strm.sendTrailers(stcCancelled)
-      #  await failSilently strm.sendNoError()
       raise err
     except GrpcFailure as err:
       if not strm.trailersSent:
@@ -102,6 +94,8 @@ proc processStream(
         await failSilently strm.sendTrailers(stcInternal)
         await failSilently strm.sendNoError()
       raise err
+    finally:
+      strm.ended = true
     if not strm.trailersSent:
       await strm.sendTrailers(stcOk)
 

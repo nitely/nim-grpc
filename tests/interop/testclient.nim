@@ -217,14 +217,17 @@ testAsync "server_streaming":
   with client:
     let stream = client.newGrpcStream(streamingOutputCall)
     with stream:
-      await stream.sendMessage(StreamingOutputCallRequest(
-        responseParameters: @[
-          ResponseParameters(size: 31415),
-          ResponseParameters(size: 9),
-          ResponseParameters(size: 2653),
-          ResponseParameters(size: 58979),
-        ]
-      ))
+      await stream.sendMessage(
+        StreamingOutputCallRequest(
+          responseParameters: @[
+            ResponseParameters(size: 31415),
+            ResponseParameters(size: 9),
+            ResponseParameters(size: 2653),
+            ResponseParameters(size: 58979),
+          ]
+        ),
+        finish = true
+      )
       var sizes = newSeq[int]()
       whileRecvMessages stream:
         let request = await stream.recvMessage(StreamingOutputCallResponse)
@@ -240,12 +243,15 @@ when testCompression:
     with client:
       let stream = client.newGrpcStream(streamingOutputCall)
       with stream:
-        await stream.sendMessage(StreamingOutputCallRequest(
-          responseParameters: @[
-            ResponseParameters(size: 31415, compressed: boolTrue),
-            ResponseParameters(size: 92653, compressed: boolFalse),
-          ]
-        ))
+        await stream.sendMessage(
+          StreamingOutputCallRequest(
+            responseParameters: @[
+              ResponseParameters(size: 31415, compressed: boolTrue),
+              ResponseParameters(size: 92653, compressed: boolFalse),
+            ]
+          ),
+          finish = true
+        )
         var sizes = newSeq[int]()
         var compr = newSeq[bool]()
         whileRecvMessages stream:

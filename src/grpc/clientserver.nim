@@ -143,8 +143,9 @@ func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
     newSeqRef(headers)
 
 proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
-  doAssert not strm.headersSent
   check not strm.deadlineEx, newGrpcFailure stcDeadlineEx
+  check not strm.canceled, newGrpcFailure stcCancelled
+  check not strm.headersSent
   strm.headersSent = true
   tryHyperx await strm.stream.sendHeaders(headers, finish = false)
 
@@ -156,6 +157,7 @@ proc sendMessage*(
 ) {.async.} =
   if not strm.headersSent:
     await strm.sendHeaders()
+  check not strm.deadlineEx, newGrpcFailure stcDeadlineEx
   check not strm.canceled, newGrpcFailure stcCancelled
   tryHyperx await strm.stream.sendBody(data, finish)
 
@@ -202,10 +204,8 @@ proc sendMessage*[T](
 ) {.async.} =
   if strm.typ == gtClient and compress:
     doAssert strm.compress, "stream compression is not enabled"
-  await strm.sendMessage(
-    msg.pbEncode(compress and strm.compress),
-    finish = finish
-  )
+  let data = msg.pbEncode(compress and strm.compress)
+  await strm.sendMessage(data, finish = finish)
 
 proc failSilently*(fut: Future[void]) {.async.} =
   try:
