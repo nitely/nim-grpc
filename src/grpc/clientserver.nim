@@ -149,8 +149,8 @@ proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
   strm.headersSent = true
   tryHyperx await strm.stream.sendHeaders(headers, finish = false)
 
-proc sendHeaders*(strm: GrpcStream) {.async.} =
-  await strm.sendHeaders(strm.headersOut)
+proc sendHeaders*(strm: GrpcStream): Future[void] =
+  strm.sendHeaders(strm.headersOut)
 
 proc sendMessage*(
   strm: GrpcStream, data: ref string, finish = false
@@ -161,8 +161,8 @@ proc sendMessage*(
   check not strm.canceled, newGrpcFailure stcCancelled
   tryHyperx await strm.stream.sendBody(data, finish)
 
-proc sendEnd*(strm: GrpcStream) {.async.} =
-  await strm.sendMessage(newStringRef(), finish = true)
+proc sendEnd*(strm: GrpcStream): Future[void] =
+  strm.sendMessage(newStringRef(), finish = true)
 
 proc sendCancel*(strm: GrpcStream) {.async.} =
   # XXX maybe just raise cancel error here
@@ -201,11 +201,11 @@ template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =
 
 proc sendMessage*[T](
   strm: GrpcStream, msg: T, finish = false, compress = false
-) {.async.} =
+): Future[void] =
   if strm.typ == gtClient and compress:
     doAssert strm.compress, "stream compression is not enabled"
   let data = msg.pbEncode(compress and strm.compress)
-  await strm.sendMessage(data, finish = finish)
+  result = strm.sendMessage(data, finish = finish)
 
 proc failSilently*(fut: Future[void]) {.async.} =
   try:
