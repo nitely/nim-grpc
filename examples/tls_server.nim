@@ -8,7 +8,7 @@ import ../src/grpc
 import ./pbtypes
 
 const localHost = "127.0.0.1"
-const localPort = Port 4443
+const localPort = Port 8113
 const certFile = getEnv "HYPERX_TEST_CERTFILE"
 const keyFile = getEnv "HYPERX_TEST_KEYFILE"
 

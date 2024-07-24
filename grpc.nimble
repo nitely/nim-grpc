@@ -34,12 +34,12 @@ task interoptest2, "Interop test without compression":
 task gointeropserve, "Go interop serve":
   # GRPC_GO_LOG_SEVERITY_LEVEL=info
   echo "Go serve forever"
-  exec "./go_server --use_tls --tls_cert_file $HYPERX_TEST_CERTFILE --tls_key_file $HYPERX_TEST_KEYFILE --port 4443"
+  exec "./go_server --use_tls --tls_cert_file $HYPERX_TEST_CERTFILE --tls_key_file $HYPERX_TEST_KEYFILE --port 8223"
 
 task gointeroptest, "Go interop test":
   template goTest(testName: string): untyped =
     echo "Go test: " & testName
-    exec "./go_client --use_tls --server_port 4443 --test_case " & testName
+    exec "./go_client --use_tls --server_port 8223 --test_case " & testName
   goTest "empty_unary"
   goTest "large_unary"
   goTest "client_streaming"

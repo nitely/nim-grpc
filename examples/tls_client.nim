@@ -7,7 +7,7 @@ import ./pbtypes
 
 proc main() {.async.} =
   #var client = newClient("127.0.0.1", Port 50051)
-  var client = newClient("127.0.0.1", Port 4443)
+  var client = newClient("127.0.0.1", Port 8113)
   with client:
     block:
       echo "Simple request"

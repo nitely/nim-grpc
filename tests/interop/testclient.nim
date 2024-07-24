@@ -29,7 +29,7 @@ template testAsync(name: string, body: untyped): untyped =
   )()
 
 const localHost = "127.0.0.1"
-const localPort = Port 4443
+const localPort = Port 8223
 const boolTrue = BoolValue(value: true)
 const boolFalse = BoolValue(value: false)
 
