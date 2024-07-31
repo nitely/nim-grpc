@@ -167,14 +167,10 @@ proc sendEnd*(strm: GrpcStream): Future[void] =
 proc sendCancel*(strm: GrpcStream) {.async.} =
   # XXX maybe just raise cancel error here
   strm.canceled = true
-  tryHyperx await strm.stream.sendRst(errCancel)
-
-proc cancel*(strm: GrpcStream) {.raises: [].} =
-  doAssert strm.canceled
-  strm.stream.cancel()
+  tryHyperx await strm.stream.cancel(errCancel)
 
 proc sendNoError*(strm: GrpcStream) {.async.} =
-  tryHyperx await strm.stream.sendRst(errNoError)
+  tryHyperx await strm.stream.cancel(errNoError)
 
 proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
   ## An error is raised if the stream recv ends without a message.

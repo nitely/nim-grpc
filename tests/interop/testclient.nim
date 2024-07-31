@@ -454,7 +454,6 @@ testAsync "cancel_after_begin":
       with stream:
         await stream.sendHeaders()
         await stream.sendCancel()
-        # XXX wait server to actually cancel somehow
     except GrpcFailure as err:
       doAssert err.code == stcCancelled, $err.code
       inc checked

@@ -52,7 +52,6 @@ proc deadlineTask(strm: GrpcStream) {.async.} =
   if strm.deadlineEx:
     if strm.headersSent:  # not idle; client only
       await failSilently strm.sendCancel()
-      strm.cancel()
 
 template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient

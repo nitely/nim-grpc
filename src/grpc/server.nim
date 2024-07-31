@@ -62,7 +62,6 @@ proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
     if not strm.trailersSent:
       await failSilently strm.sendTrailers(stcDeadlineEx)
       await failSilently strm.sendCancel()
-      strm.cancel()
 
 proc processStream(
   strm: GrpcStream, routes: GrpcRoutes
