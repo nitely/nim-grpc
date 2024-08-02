@@ -1,6 +1,6 @@
 # Package
 
-version = "0.1.3"
+version = "0.1.4"
 author = "Esteban Castro Borsani (@nitely)"
 description = "Pure Nim gRPC client and server"
 license = "MIT"
@@ -8,7 +8,7 @@ srcDir = "src"
 skipDirs = @["tests", "examples"]
 
 requires "nim >= 2.0.0"
-requires "hyperx >= 0.1.25"
+requires "hyperx >= 0.1.27"
 requires "protobuf_serialization >= 0.3.0"
 requires "zippy >= 0.10.14"
 
