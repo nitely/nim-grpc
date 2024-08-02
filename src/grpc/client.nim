@@ -55,32 +55,42 @@ proc deadlineTask(strm: GrpcStream) {.async.} =
 
 template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient
-  if strm.timeout > 0:
-    asyncCheck deadlineTask(strm)
   var failure = false
   var failureCode = stcInternal
   try:
     with strm.stream:
-      block:
-        body
-      # XXX cancel stream if not recvEnded, and error out
-      # XXX send/recv trailers
-      if strm.canceled:
-        raise newGrpcFailure(stcCancelled)
-      if not strm.stream.sendEnded:
-        await strm.sendMessage(newStringRef(), finish = true)
-      if not strm.recvEnded:
-        let recvData = newStringRef()
-        let recved = await strm.recvMessage(recvData)
-        check recvData[].len == 0
-        check strm.recvEnded
-        check not recved
+      var deadlineFut: Future[void]
+      if strm.timeout > 0:
+        deadlineFut = deadlineTask(strm)
+      try:
+        block:
+          body
+        # XXX cancel stream if not recvEnded, and error out
+        # XXX send/recv trailers
+        if strm.canceled:
+          raise newGrpcFailure(stcCancelled)
+        if not strm.stream.sendEnded:
+          await strm.sendMessage(newStringRef(), finish = true)
+        if not strm.recvEnded:
+          let recvData = newStringRef()
+          let recved = await strm.recvMessage(recvData)
+          check recvData[].len == 0
+          check strm.recvEnded
+          check not recved
+      finally:
+        strm.ended = true
+        if strm.deadlineEx:
+          await failSilently deadlineFut
+        elif deadlineFut != nil:
+          asyncCheck deadlineFut
   except GrpcRemoteFailure:
     # grpc-go server sends Rst no_error but trailer status is ok
     debugInfo getCurrentException().getStackTrace()
     debugInfo getCurrentException().msg
     discard
   except GrpcFailure as err:
+    debugInfo err.getStackTrace()
+    debugInfo err.msg
     if strm.deadlineEx:
       raise newGrpcFailure(stcDeadlineEx)
     if strm.canceled:
@@ -91,8 +101,6 @@ template with*(strm: GrpcStream, body: untyped): untyped =
     debugInfo getCurrentException().getStackTrace()
     debugInfo getCurrentException().msg
     doAssert false
-  finally:
-    strm.ended = true
   strm.headers[].add strm.stream.recvTrailers
   debugInfo strm.headers[]
   let respHeaders = toResponseHeaders strm.headers[]

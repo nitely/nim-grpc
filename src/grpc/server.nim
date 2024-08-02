@@ -67,13 +67,14 @@ proc processStream(
   strm: GrpcStream, routes: GrpcRoutes
 ) {.async.} =
   with strm.stream:
+    var deadlineFut: Future[void]
     try:
       await strm.recvHeaders()
       let reqHeaders = toRequestHeaders strm.headers[]
       strm.compress = reqHeaders.compress
       check reqHeaders.path in routes, newGrpcFailure stcNotFound
       if reqHeaders.timeout > 0:
-        asyncCheck deadlineTask(strm, reqHeaders.timeout)
+        deadlineFut = deadlineTask(strm, reqHeaders.timeout)
       await routes[reqHeaders.path](strm)
       if not strm.recvEnded:
         let recvData = newStringRef()
@@ -81,6 +82,8 @@ proc processStream(
         check recvData[].len == 0
         check strm.recvEnded
         check not recved
+      if not strm.trailersSent:
+        await strm.sendTrailers(stcOk)
     except GrpcRemoteFailure as err:
       raise err
     except GrpcFailure as err:
@@ -95,8 +98,10 @@ proc processStream(
       raise err
     finally:
       strm.ended = true
-    if not strm.trailersSent:
-      await strm.sendTrailers(stcOk)
+      if strm.deadlineEx:
+        await failSilently deadlineFut
+      elif deadlineFut != nil:
+        asyncCheck deadlineFut
 
 proc processStreamHandler(
   strm: GrpcStream,
