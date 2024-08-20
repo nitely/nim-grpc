@@ -15,6 +15,7 @@ import ../../src/grpc/errors
 import ./pbtypes
 
 const testCompression = defined(grpcTestCompression)
+const testSsl = not defined(grpcTestNoSsl)
 
 template testAsync(name: string, body: untyped): untyped =
   (proc () = 
@@ -29,13 +30,13 @@ template testAsync(name: string, body: untyped): untyped =
   )()
 
 const localHost = "127.0.0.1"
-const localPort = Port 8223
+const localPort = if testSsl: Port 8223 else: Port 8333
 const boolTrue = BoolValue(value: true)
 const boolFalse = BoolValue(value: false)
 
 testAsync "empty_unary":
   var checked = false
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     let stream = client.newGrpcStream(
       "/grpc.testing.TestService/EmptyCall"
@@ -50,7 +51,7 @@ const unaryCallPath = "/grpc.testing.TestService/UnaryCall"
 
 testAsync "large_unary":
   var checked = false
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     let stream = client.newGrpcStream(unaryCallPath)
     with stream:
@@ -66,7 +67,7 @@ testAsync "large_unary":
 when testCompression:
   testAsync "client_compressed_unary":
     var checked = 0
-    var client = newClient(localHost, localPort)
+    var client = newClient(localHost, localPort, ssl = testSsl)
     with client:
       try:
         let stream = client.newGrpcStream(unaryCallPath)
@@ -118,7 +119,7 @@ when testCompression:
 when testCompression:
   testAsync "server_compressed_unary":
     var checked = 0
-    var client = newClient(localHost, localPort)
+    var client = newClient(localHost, localPort, ssl = testSsl)
     with client:
       block:
         let stream = client.newGrpcStream(unaryCallPath)
@@ -150,7 +151,7 @@ const streamingInputCallPath = "/grpc.testing.TestService/StreamingInputCall"
 
 testAsync "client_streaming":
   var checked = false
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     let stream = client.newGrpcStream(streamingInputCallPath)
     with stream:
@@ -170,7 +171,7 @@ testAsync "client_streaming":
 when testCompression:
   testAsync "client_compressed_streaming":
     var checked = 0
-    var client = newClient(localHost, localPort)
+    var client = newClient(localHost, localPort, ssl = testSsl)
     with client:
       try:
         let stream = client.newGrpcStream(streamingInputCallPath, compress = true)
@@ -213,7 +214,7 @@ const streamingOutputCall = "/grpc.testing.TestService/StreamingOutputCall"
 
 testAsync "server_streaming":
   var checked = 0
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     let stream = client.newGrpcStream(streamingOutputCall)
     with stream:
@@ -239,7 +240,7 @@ testAsync "server_streaming":
 when testCompression:
   testAsync "server_compressed_streaming":
     var checked = 0
-    var client = newClient(localHost, localPort)
+    var client = newClient(localHost, localPort, ssl = testSsl)
     with client:
       let stream = client.newGrpcStream(streamingOutputCall)
       with stream:
@@ -268,7 +269,7 @@ const fullDuplexCallPath = "/grpc.testing.TestService/FullDuplexCall"
 
 testAsync "ping_pong":
   var checked = 0
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     let stream = client.newGrpcStream(fullDuplexCallPath)
     with stream:
@@ -291,7 +292,7 @@ testAsync "ping_pong":
 
 testAsync "empty_stream":
   var checked = 0
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     let stream = client.newGrpcStream(fullDuplexCallPath)
     with stream:
@@ -315,7 +316,7 @@ proc sendMetadata(strm: GrpcStream) {.async.} =
 
 testAsync "custom_metadata":
   var checked = 0
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     block:
       let stream = client.newGrpcStream(unaryCallPath)
@@ -358,7 +359,7 @@ testAsync "custom_metadata":
 
 testAsync "status_code_and_message":
   var checked = 0
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     try:
       let stream = client.newGrpcStream(unaryCallPath)
@@ -393,7 +394,7 @@ testAsync "status_code_and_message":
 testAsync "special_status_message":
   let expectedMessage = "\t\ntest with whitespace\r\nand Unicode BMP ☺ and non-BMP 😈\t\n"
   var checked = 0
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     try:
       let stream = client.newGrpcStream(unaryCallPath)
@@ -413,7 +414,7 @@ testAsync "special_status_message":
 
 testAsync "unimplemented_method":
   var checked = 0
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     try:
       let stream = client.newGrpcStream(
@@ -430,7 +431,7 @@ testAsync "unimplemented_method":
 
 testAsync "unimplemented_service":
   var checked = 0
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     try:
       let stream = client.newGrpcStream(
@@ -447,7 +448,7 @@ testAsync "unimplemented_service":
 
 testAsync "cancel_after_begin":
   var checked = 0
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     try:
       let stream = client.newGrpcStream(streamingInputCallPath)
@@ -461,7 +462,7 @@ testAsync "cancel_after_begin":
 
 testAsync "cancel_after_first_response":
   var checked = 0
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     try:
       let stream = client.newGrpcStream(fullDuplexCallPath)
@@ -483,7 +484,7 @@ testAsync "cancel_after_first_response":
 
 testAsync "timeout_on_sleeping_server":
   var checked = 0
-  var client = newClient(localHost, localPort)
+  var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     try:
       let stream = client.newGrpcStream(

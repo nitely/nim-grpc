@@ -29,10 +29,10 @@ messages and error traces
 - [x] Server
 - [x] Compression
 - [x] Interop tests
+- [x] TLS / non-TLS
 - [ ] Code gen proto Service
 - [ ] JSON
 - [ ] UDS
-- [ ] non-TLS
 - [ ] Auth
 
 ## LICENSE

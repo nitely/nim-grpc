@@ -15,8 +15,9 @@ import ../../src/grpc/statuscodes
 import ../../src/grpc/headers
 import ./pbtypes
 
+const testSsl = not defined(grpcTestNoSsl)
 const localHost = "127.0.0.1"
-const localPort = Port 8223
+const localPort = if testSsl: Port 8223 else: Port 8333
 const certFile = getEnv "HYPERX_TEST_CERTFILE"
 const keyFile = getEnv "HYPERX_TEST_KEYFILE"
 
@@ -101,7 +102,10 @@ proc unimplementedCall(strm: GrpcStream) {.async.} =
 
 proc main() {.async.} =
   echo "Serving forever"
-  let server = newServer(localHost, localPort, certFile, keyFile)
+  let server = if testSsl:
+    newServer(localHost, localPort, certFile, keyFile)
+  else:
+    newServer(localHost, localPort, ssl = testSsl)
   await server.serve({
     "/grpc.testing.TestService/EmptyCall": emptyCall.GrpcCallback,
     "/grpc.testing.TestService/UnaryCall": unaryCall.GrpcCallback,
