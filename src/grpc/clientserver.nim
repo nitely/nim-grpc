@@ -147,7 +147,7 @@ proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
   check not strm.canceled, newGrpcFailure stcCancelled
   check not strm.headersSent
   strm.headersSent = true
-  tryHyperx await strm.stream.sendHeaders(headers, finish = false)
+  tryHyperx await strm.stream.sendHeaders(headers[], finish = false)
 
 proc sendHeaders*(strm: GrpcStream): Future[void] =
   strm.sendHeaders(strm.headersOut)
