@@ -35,10 +35,8 @@ func timeoutMillis(strm: GrpcStream): int {.raises: [].} =
   of grpcMinute: tt * 60000
   of grpcSecond: tt * 1000
   of grpcMsec: tt
-  of grpcUsec:
-    if tt <= 1000: 1 else: tt div 1000
-  of grpcNsec:
-    if tt <= 1_000_000: 1 else: tt div 1_000_000
+  of grpcUsec: max(1, tt div 1000)
+  of grpcNsec: max(1, tt div 1_000_000)
 
 proc deadlineTask(strm: GrpcStream) {.async.} =
   ## Meant to be asyncCheck'd

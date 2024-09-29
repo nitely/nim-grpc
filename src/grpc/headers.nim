@@ -29,12 +29,12 @@ iterator headersIt*(s: string): (Slice[int], Slice[int]) {.inline.} =
 func parseStatusCode(raw: openArray[char]): StatusCode =
   if raw.len notin 1 .. 2:
     return stcUnknown
-  for x in raw:
-    if x.ord notin '0'.ord .. '9'.ord:
+  var code = 0
+  for i in 0 .. raw.len-1:
+    if raw[i].ord in '0'.ord .. '9'.ord:
+      code = code * 10 + (raw[i].ord - '0'.ord)
+    else:
       return stcUnknown
-  var code = raw[0].ord - '0'.ord
-  if raw.len > 1:
-    code = code * 10 + (raw[1].ord - '0'.ord)
   if code > 16:
     return stcUnknown
   return code.StatusCode
@@ -68,12 +68,9 @@ func toMillis(tt: int, unit: char): int {.raises: [GrpcFailure].} =
   of 'S':
     check tt < int.high div 1000, newGrpcFailure()
     tt * 1000
-  of 'm':
-    tt
-  of 'u':
-    if tt <= 1000: 1 else: tt div 1000
-  of 'n':
-    if tt <= 1_000_000: 1 else: tt div 1_000_000
+  of 'm': tt
+  of 'u': max(1, tt div 1000)
+  of 'n': max(1, tt div 1_000_000)
   else:
     doAssert false; 0
 

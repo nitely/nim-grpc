@@ -115,32 +115,28 @@ func `$`(typ: GrpcTimeoutUnit): char =
   of grpcNsec: 'n'
 
 func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
+  var headers = newSeq[(string, string)]()
   case strm.typ
   of gtClient:
-    var headers = @[
-      (":method", "POST"),
-      (":scheme", "https"),
-      (":path", strm.path[]),
-      (":authority", strm.stream.client.hostname),
-      ("te", "trailers"),
-      ("grpc-accept-encoding", "identity, gzip, deflate"),
-      ("user-agent", "grpc-nim/0.1.0"),
-      ("content-type", "application/grpc+proto")
-    ]
+    headers.add (":method", "POST")
+    headers.add (":scheme", "https")
+    headers.add (":path", strm.path[])
+    headers.add (":authority", strm.stream.client.hostname)
+    headers.add ("te", "trailers")
+    headers.add ("grpc-accept-encoding", "identity, gzip, deflate")
+    headers.add ("user-agent", "grpc-nim/0.1.0")
+    headers.add ("content-type", "application/grpc+proto")
     if strm.compress:
       headers.add ("grpc-encoding", "gzip")
     if strm.timeout > 0:
       headers.add ("grpc-timeout", $strm.timeout & $strm.timeoutUnit)
-    newSeqRef(headers)
   of gtServer:
-    var headers = @[
-      (":status", "200"),
-      ("grpc-accept-encoding", "identity, gzip, deflate"),
-      ("content-type", "application/grpc+proto")
-    ]
+    headers.add (":status", "200")
+    headers.add ("grpc-accept-encoding", "identity, gzip, deflate")
+    headers.add ("content-type", "application/grpc+proto")
     if strm.compress:
       headers.add ("grpc-encoding", "gzip")
-    newSeqRef(headers)
+  return newSeqRef(headers)
 
 proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
   check not strm.deadlineEx, newGrpcFailure stcDeadlineEx
