@@ -53,6 +53,21 @@ proc deadlineTask(strm: GrpcStream) {.async.} =
 
 template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient
+  var deadlineFut: Future[void]
+  if strm.timeout > 0:
+    deadlineFut = deadlineTask(strm)
+  try:
+    with strm.stream:
+      body
+  finally:
+    strm.ended = true
+    if strm.deadlineEx:
+      await failSilently deadlineFut
+    elif deadlineFut != nil:
+      asyncCheck deadlineFut
+
+template with2*(strm: GrpcStream, body: untyped): untyped =
+  doAssert strm.typ == gtClient
   var failure = false
   var failureCode = stcInternal
   try:
