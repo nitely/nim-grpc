@@ -105,3 +105,14 @@ func toRequestHeaders*(s: string): RequestHeaders {.raises: [GrpcFailure].} =
     elif toOpenArray(s, nn.a, nn.b) == "grpc-accept-encoding":
       #result.compress = "gzip" in toOpenArray(s, vv.a, vv.b)
       result.compress = "gzip" in s[vv.a .. vv.b]
+
+func checkResponseError*(s: string) {.raises: [GrpcResponseError].} =
+  var status = stcUnknown
+  var msg = ""
+  for (nn, vv) in headersIt s:
+    if toOpenArray(s, nn.a, nn.b) == "grpc-status":
+      status = parseStatusCode toOpenArray(s, vv.a, vv.b)
+    elif toOpenArray(s, nn.a, nn.b) == "grpc-message":
+      msg = percentDec s[vv]
+  if status != stcOk:
+    raise newGrpcResponseError(status, msg)
