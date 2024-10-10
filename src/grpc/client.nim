@@ -66,7 +66,7 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         if not strm.stream.sendEnded:
           await strm.sendEnd()
         if not strm.recvEnded:
-          await strm.recvEnd()  # XXX cancel if not end recv
+          await strm.recvEnd()
     except GrpcRemoteFailure:
       # grpc-go server sends Rst no_error but trailer status is ok
       debugInfo getCurrentException().getStackTrace()
@@ -75,10 +75,10 @@ template with*(strm: GrpcStream, body: untyped): untyped =
     except GrpcFailure as err:
       debugInfo err.getStackTrace()
       debugInfo err.msg
-      if strm.deadlineEx:
-        raise newGrpcFailure(stcDeadlineEx)
       raise err
     finally:
+      if not strm.recvEnded:
+        await failSilently strm.sendCancel()
       strm.ended = true
       if strm.deadlineEx:
         await failSilently deadlineFut
@@ -86,4 +86,8 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         asyncCheck deadlineFut
       strm.headers[].add strm.stream.recvTrailers
       debugInfo strm.headers[]
+      if strm.deadlineEx:
+        raise newGrpcFailure(stcDeadlineEx)
+      if strm.canceled:
+        raise newGrpcFailure(stcCancelled)
       checkResponseError(strm.headers[])
