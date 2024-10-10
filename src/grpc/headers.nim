@@ -57,6 +57,11 @@ func toResponseHeaders*(s: string): ResponseHeaders =
     elif toOpenArray(s, nn.a, nn.b) == "grpc-message":
       result.statusMsg = percentDec s[vv]
 
+func checkResponseError*(s: string) {.raises: [GrpcResponseError].} =
+  let r = toResponseHeaders s
+  if r.status != stcOk:
+    raise newGrpcResponseError(r.status, r.statusMsg)
+
 func toMillis(tt: int, unit: char): int {.raises: [GrpcFailure].} =
   case unit
   of 'H':

@@ -53,34 +53,20 @@ proc deadlineTask(strm: GrpcStream) {.async.} =
 
 template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient
-  var failure = false
-  var failureCode = stcInternal
+  var deadlineFut: Future[void]
+  if strm.timeout > 0:
+    deadlineFut = deadlineTask(strm)
   try:
     with strm.stream:
-      var deadlineFut: Future[void]
-      if strm.timeout > 0:
-        deadlineFut = deadlineTask(strm)
       try:
-        block:
-          body
-        # XXX cancel stream if not recvEnded, and error out
-        # XXX send/recv trailers
+        body
+      finally:
         if strm.canceled:
           raise newGrpcFailure(stcCancelled)
         if not strm.stream.sendEnded:
-          await strm.sendMessage(newStringRef(), finish = true)
+          await strm.sendEnd()
         if not strm.recvEnded:
-          let recvData = newStringRef()
-          let recved = await strm.recvMessage(recvData)
-          check recvData[].len == 0
-          check strm.recvEnded
-          check not recved
-      finally:
-        strm.ended = true
-        if strm.deadlineEx:
-          await failSilently deadlineFut
-        elif deadlineFut != nil:
-          asyncCheck deadlineFut
+          await strm.recvEnd()
   except GrpcRemoteFailure:
     # grpc-go server sends Rst no_error but trailer status is ok
     debugInfo getCurrentException().getStackTrace()
@@ -89,23 +75,19 @@ template with*(strm: GrpcStream, body: untyped): untyped =
   except GrpcFailure as err:
     debugInfo err.getStackTrace()
     debugInfo err.msg
+    raise err
+  finally:
+    if not strm.recvEnded and not strm.canceled:
+      await failSilently strm.sendCancel()
+    strm.ended = true
+    if strm.deadlineEx:
+      await failSilently deadlineFut
+    elif deadlineFut != nil:
+      asyncCheck deadlineFut
+    strm.headers[].add strm.stream.recvTrailers
+    debugInfo strm.headers[]
     if strm.deadlineEx:
       raise newGrpcFailure(stcDeadlineEx)
     if strm.canceled:
-      raise err
-    failure = true
-    failureCode = err.code
-  except HyperxError:
-    debugInfo getCurrentException().getStackTrace()
-    debugInfo getCurrentException().msg
-    doAssert false
-  strm.headers[].add strm.stream.recvTrailers
-  debugInfo strm.headers[]
-  let respHeaders = toResponseHeaders strm.headers[]
-  if respHeaders.status != stcOk:
-    raise newGrpcResponseError(
-      respHeaders.status,
-      respHeaders.statusMsg
-    )
-  if failure:
-    raise newGrpcFailure(failureCode)
+      raise newGrpcFailure(stcCancelled)
+    checkResponseError(strm.headers[])

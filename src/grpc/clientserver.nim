@@ -184,6 +184,13 @@ proc recvMessage2*[T](strm: GrpcStream, t: typedesc[T]): Future[(bool, T)] {.asy
   result[0] = msg[][0] == 1.char
   result[1] = msg.pbDecode(T)
 
+proc recvEnd*(strm: GrpcStream) {.async.} =
+  let recvData = new string
+  let recved = await strm.recvMessage(recvData)
+  check recvData[].len == 0
+  check strm.recvEnded
+  check not recved
+
 template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =
   try:
     while not strm.recvEnded:

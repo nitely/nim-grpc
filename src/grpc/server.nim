@@ -77,11 +77,7 @@ proc processStream(
         deadlineFut = deadlineTask(strm, reqHeaders.timeout)
       await routes[reqHeaders.path](strm)
       if not strm.recvEnded:
-        let recvData = newStringRef()
-        let recved = await strm.recvMessage(recvData)
-        check recvData[].len == 0
-        check strm.recvEnded
-        check not recved
+        await strm.recvEnd()
       if not strm.trailersSent:
         await strm.sendTrailers(stcOk)
     except GrpcRemoteFailure as err:
