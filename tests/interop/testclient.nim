@@ -502,5 +502,3 @@ testAsync "timeout_on_sleeping_server":
       doAssert err.code == stcDeadlineEx, $err.code
       inc checked
   doAssert checked == 1
-  # let deadline task finish
-  await sleepAsync(100)
