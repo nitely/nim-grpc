@@ -61,8 +61,7 @@ template with*(strm: GrpcStream, body: untyped): untyped =
       try:
         body
       finally:
-        if strm.canceled:
-          raise newGrpcFailure(stcCancelled)
+        check not strm.canceled, newGrpcFailure(stcCancelled)
         if not strm.stream.sendEnded:
           await strm.sendEnd()
         if not strm.recvEnded:
@@ -86,8 +85,6 @@ template with*(strm: GrpcStream, body: untyped): untyped =
       asyncCheck deadlineFut
     strm.headers[].add strm.stream.recvTrailers
     debugInfo strm.headers[]
-    if strm.deadlineEx:
-      raise newGrpcFailure(stcDeadlineEx)
-    if strm.canceled:
-      raise newGrpcFailure(stcCancelled)
+    check not strm.deadlineEx, newGrpcFailure(stcDeadlineEx)
+    check not strm.canceled, newGrpcFailure(stcCancelled)
     checkResponseError(strm.headers[])
