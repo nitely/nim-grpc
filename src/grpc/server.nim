@@ -80,6 +80,7 @@ proc processStream(
         await strm.recvEnd()
       if not strm.trailersSent:
         await strm.sendTrailers(stcOk)
+        #await strm.sendNoError()
     except GrpcRemoteFailure as err:
       raise err
     except GrpcFailure as err:

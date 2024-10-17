@@ -64,47 +64,6 @@ proc newGrpcStream*(
     gtClient, newClientStream(client), path, timeout, timeoutUnit, compress
   )
 
-proc recvEnded*(strm: GrpcStream): bool =
-  result = strm.stream.recvEnded and strm.buff[].len == 0
-
-proc recvHeaders*(strm: GrpcStream) {.async.} =
-  doAssert strm.headers[].len == 0
-  #check not strm.canceled, newGrpcFailure stcCancelled
-  tryHyperx await strm.stream.recvHeaders(strm.headers)
-
-func recordSize(data: string): int =
-  if data.len == 0:
-    return 0
-  doAssert data.len >= 5
-  var L = 0'u32
-  L += data[1].uint32 shl 24
-  L += data[2].uint32 shl 16
-  L += data[3].uint32 shl 8
-  L += data[4].uint32
-  # XXX check bit 31 is not set
-  result = L.int+5
-
-func hasFullRecord(data: string): bool =
-  if data.len < 5:
-    return false
-  result = data.len >= data.recordSize
-
-proc recvMessage*(
-  strm: GrpcStream, data: ref string
-): Future[bool] {.async.} =
-  ## Adds a single record to data. It will add nothing
-  ## if recv ends.
-  if strm.headers[].len == 0:
-    await strm.recvHeaders()
-  while not strm.stream.recvEnded and not strm.buff[].hasFullRecord:
-    #check not strm.canceled, newGrpcFailure stcCancelled
-    tryHyperx await strm.stream.recvBody(strm.buff)
-  check strm.buff[].hasFullRecord or strm.buff[].len == 0
-  let L = strm.buff[].recordSize
-  data[].add toOpenArray(strm.buff[], 0, L-1)
-  strm.buff[].setSlice L .. strm.buff[].len-1
-  result = L > 0
-
 func `$`(typ: GrpcTimeoutUnit): char =
   case typ
   of grpcHour: 'H'
@@ -157,6 +116,14 @@ proc sendMessage*(
   check not strm.canceled, newGrpcFailure stcCancelled
   tryHyperx await strm.stream.sendBody(data, finish)
 
+proc sendMessage*[T](
+  strm: GrpcStream, msg: T, finish = false, compress = false
+): Future[void] =
+  if strm.typ == gtClient and compress:
+    doAssert strm.compress, "stream compression is not enabled"
+  let data = msg.pbEncode(compress and strm.compress)
+  result = strm.sendMessage(data, finish = finish)
+
 proc sendEnd*(strm: GrpcStream): Future[void] =
   strm.sendMessage(newStringRef(), finish = true)
 
@@ -167,6 +134,49 @@ proc sendCancel*(strm: GrpcStream) {.async.} =
 
 proc sendNoError*(strm: GrpcStream) {.async.} =
   tryHyperx await strm.stream.cancel(errNoError)
+
+proc recvEnded*(strm: GrpcStream): bool =
+  result = strm.stream.recvEnded and strm.buff[].len == 0
+
+proc recvHeaders*(strm: GrpcStream) {.async.} =
+  doAssert strm.headers[].len == 0
+  #check not strm.canceled, newGrpcFailure stcCancelled
+  tryHyperx await strm.stream.recvHeaders(strm.headers)
+
+func recordSize(data: string): int =
+  if data.len == 0:
+    return 0
+  doAssert data.len >= 5
+  var L = 0'u32
+  L += data[1].uint32 shl 24
+  L += data[2].uint32 shl 16
+  L += data[3].uint32 shl 8
+  L += data[4].uint32
+  # XXX check bit 31 is not set
+  result = L.int+5
+
+func hasFullRecord(data: string): bool =
+  if data.len < 5:
+    return false
+  result = data.len >= data.recordSize
+
+proc recvMessage*(
+  strm: GrpcStream, data: ref string
+): Future[bool] {.async.} =
+  ## Adds a single record to data. It will add nothing
+  ## if recv ends.
+  if not strm.headersSent and strm.typ == gtClient:
+    await strm.sendHeaders(strm.headersOut)
+  if strm.headers[].len == 0:
+    await strm.recvHeaders()
+  while not strm.stream.recvEnded and not strm.buff[].hasFullRecord:
+    #check not strm.canceled, newGrpcFailure stcCancelled
+    tryHyperx await strm.stream.recvBody(strm.buff)
+  check strm.buff[].hasFullRecord or strm.buff[].len == 0
+  let L = strm.buff[].recordSize
+  data[].add toOpenArray(strm.buff[], 0, L-1)
+  strm.buff[].setSlice L .. strm.buff[].len-1
+  result = L > 0
 
 proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
   ## An error is raised if the stream recv ends without a message.
@@ -197,14 +207,6 @@ template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =
       body
   except GrpcNoMessageException:
     doAssert strm.recvEnded
-
-proc sendMessage*[T](
-  strm: GrpcStream, msg: T, finish = false, compress = false
-): Future[void] =
-  if strm.typ == gtClient and compress:
-    doAssert strm.compress, "stream compression is not enabled"
-  let data = msg.pbEncode(compress and strm.compress)
-  result = strm.sendMessage(data, finish = finish)
 
 proc failSilently*(fut: Future[void]) {.async.} =
   try:

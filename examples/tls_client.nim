@@ -35,5 +35,16 @@ proc main() {.async.} =
           await stream.sendMessage(HelloRequest(name: "count " & $i))
           let reply = await stream.recvMessage(HelloReply)
           doAssert reply.message == "Hello, count " & $i
+    when false:
+      echo "Bidirectional stream server to client"
+      let stream = client.newGrpcStream("/helloworld.Greeter/SayHelloBidiStream2")
+      with stream:
+        var i = 0
+        whileRecvMessages stream:
+          let reply = await stream.recvMessage(HelloReply)
+          let expected = if i == 0: "Hello" else: "Hello, " & $(i-1)
+          doAssert reply.message == expected
+          await stream.sendMessage(HelloRequest(name: $i))
+          inc i
 
 waitFor main()
