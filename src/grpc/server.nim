@@ -48,7 +48,7 @@ proc sendTrailers(strm: GrpcStream, status: StatusCode, msg = ""): Future[void] 
 
 proc sendCancel*(strm: GrpcStream, status: StatusCode) {.async.} =
   await strm.sendTrailers(status)
-  await strm.sendCancel()
+  await failSilently strm.sendCancel()
 
 proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
   doAssert timeout > 0

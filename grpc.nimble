@@ -21,6 +21,12 @@ task exampleserve, "Example serve":
 task exampleclient, "Example client":
   exec "nim c -r examples/tls_client.nim"
 
+task testserve, "Test serve":
+  exec "nim c -r tests/testserver.nim"
+
+task testclient, "Test client":
+  exec "nim c -r tests/testclient.nim"
+
 task interopserve, "Interop serve":
   exec "nim c -r tests/interop/testserver.nim"
 

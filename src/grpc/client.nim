@@ -53,19 +53,29 @@ proc deadlineTask(strm: GrpcStream) {.async.} =
 
 template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient
+  var failure = false
+  var failureCode = stcInternal
   var deadlineFut: Future[void]
   if strm.timeout > 0:
     deadlineFut = deadlineTask(strm)
   try:
     with strm.stream:
       try:
-        body
-      finally:
+        block:
+          body
         check not strm.canceled, newGrpcFailure(stcCancelled)
         if not strm.stream.sendEnded:
           await strm.sendEnd()
         if not strm.recvEnded:
           await strm.recvEnd()
+      finally:
+        if not strm.recvEnded and not strm.canceled:
+          await failSilently strm.sendCancel()
+        strm.ended = true
+        if strm.deadlineEx:
+          await failSilently deadlineFut
+        elif deadlineFut != nil:
+          asyncCheck deadlineFut
   except GrpcRemoteFailure:
     # grpc-go server sends Rst no_error but trailer status is ok
     debugInfo getCurrentException().getStackTrace()
@@ -74,17 +84,12 @@ template with*(strm: GrpcStream, body: untyped): untyped =
   except GrpcFailure as err:
     debugInfo err.getStackTrace()
     debugInfo err.msg
-    raise err
-  finally:
-    if not strm.recvEnded and not strm.canceled:
-      await failSilently strm.sendCancel()
-    strm.ended = true
-    if strm.deadlineEx:
-      await failSilently deadlineFut
-    elif deadlineFut != nil:
-      asyncCheck deadlineFut
-    strm.headers[].add strm.stream.recvTrailers
-    debugInfo strm.headers[]
-    check not strm.deadlineEx, newGrpcFailure(stcDeadlineEx)
-    check not strm.canceled, newGrpcFailure(stcCancelled)
-    checkResponseError(strm.headers[])
+    failure = true
+    failureCode = err.code
+  strm.headers[].add strm.stream.recvTrailers
+  debugInfo strm.headers[]
+  check not strm.deadlineEx, newGrpcFailure(stcDeadlineEx)
+  check not strm.canceled, newGrpcFailure(stcCancelled)
+  checkResponseError(strm.headers[])
+  if failure:
+    raise newGrpcFailure(failureCode)

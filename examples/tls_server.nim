@@ -32,15 +32,6 @@ proc sayHelloBidiStream(strm: GrpcStream) {.async.} =
       HelloReply(message: "Hello, " & request.name)
     )
 
-proc sayHelloBidiStream2(strm: GrpcStream) {.async.} =
-  var message = "Hello"
-  for _ in 0 .. 2:
-    await strm.sendMessage(
-      HelloReply(message: message)
-    )
-    let request = await strm.recvMessage(HelloRequest)
-    message = "Hello, " & request.name
-
 proc main() {.async.} =
   echo "Serving forever"
   let server = newServer(localHost, localPort, certFile, keyFile)
@@ -48,7 +39,6 @@ proc main() {.async.} =
     "/helloworld.Greeter/SayHello": sayHello.GrpcCallback,
     "/helloworld.Greeter/SayHelloStreamReply": sayHelloStreamReply.GrpcCallback,
     "/helloworld.Greeter/SayHelloBidiStream": sayHelloBidiStream.GrpcCallback,
-    "/helloworld.Greeter/SayHelloBidiStream2": sayHelloBidiStream2.GrpcCallback,
   }.newtable)
 
 waitFor main()
