@@ -42,3 +42,31 @@ testAsync "error_propagation":
     doAssert err.msg == "test foo"
     inc checked
   doAssert checked == 1
+
+testAsync "error_propagation_2":
+  var checked = 0
+  var client = newClient("127.0.0.1", Port 8114)
+  try:
+    with client:
+      let stream = client.newGrpcStream("/helloworld.Greeter/TestHello")
+      with stream:
+        raise newException(ValueError, "test foo")
+  except ValueError as err:
+    doAssert err.msg == "test foo"
+    inc checked
+  doAssert checked == 1
+
+testAsync "error_propagation_3":
+  var checked = 0
+  var client = newClient("127.0.0.1", Port 8114)
+  try:
+    with client:
+      let stream = client.newGrpcStream("/helloworld.Greeter/TestHello")
+      with stream:
+        await stream.sendMessage(HelloRequest(name: "you"))
+        discard await stream.recvMessage(HelloReply)
+        raise newException(ValueError, "test foo")
+  except ValueError as err:
+    doAssert err.msg == "test foo"
+    inc checked
+  doAssert checked == 1
