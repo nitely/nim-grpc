@@ -17,11 +17,16 @@ template testAsync(name: string, body: untyped): untyped =
     doAssert checked
   )()
 
+const localHost = "127.0.0.1"
+const localPort = Port 8114
+const testHelloPath = "/helloworld.Greeter/TestHello"
+const testHelloBidiPath = "/helloworld.Greeter/TestHelloBidi"
+
 testAsync "simple_request":
   var checked = 0
-  var client = newClient("127.0.0.1", Port 8114)
+  var client = newClient(localHost, localPort)
   with client:
-    let stream = client.newGrpcStream("/helloworld.Greeter/TestHello")
+    let stream = client.newGrpcStream(testHelloPath)
     with stream:
       await stream.sendMessage(HelloRequest(name: "you"))
       let reply = await stream.recvMessage(HelloReply)
@@ -29,12 +34,25 @@ testAsync "simple_request":
       inc checked
   doAssert checked == 1
 
+testAsync "simple_request_2":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    for i in 0 .. 2:
+      let stream = client.newGrpcStream(testHelloPath)
+      with stream:
+        await stream.sendMessage(HelloRequest(name: "you" & $i))
+        let reply = await stream.recvMessage(HelloReply)
+        doAssert reply.message == "Hello, you" & $i
+        inc checked
+  doAssert checked == 3
+
 testAsync "error_propagation":
   var checked = 0
-  var client = newClient("127.0.0.1", Port 8114)
+  var client = newClient(localHost, localPort)
   try:
     with client:
-      let stream = client.newGrpcStream("/helloworld.Greeter/TestHello")
+      let stream = client.newGrpcStream(testHelloPath)
       with stream:
         await stream.sendMessage(HelloRequest(name: "you"))
         raise newException(ValueError, "test foo")
@@ -45,10 +63,10 @@ testAsync "error_propagation":
 
 testAsync "error_propagation_2":
   var checked = 0
-  var client = newClient("127.0.0.1", Port 8114)
+  var client = newClient(localHost, localPort)
   try:
     with client:
-      let stream = client.newGrpcStream("/helloworld.Greeter/TestHello")
+      let stream = client.newGrpcStream(testHelloPath)
       with stream:
         raise newException(ValueError, "test foo")
   except ValueError as err:
@@ -58,10 +76,10 @@ testAsync "error_propagation_2":
 
 testAsync "error_propagation_3":
   var checked = 0
-  var client = newClient("127.0.0.1", Port 8114)
+  var client = newClient(localHost, localPort)
   try:
     with client:
-      let stream = client.newGrpcStream("/helloworld.Greeter/TestHello")
+      let stream = client.newGrpcStream(testHelloPath)
       with stream:
         await stream.sendMessage(HelloRequest(name: "you"))
         discard await stream.recvMessage(HelloReply)
@@ -70,3 +88,34 @@ testAsync "error_propagation_3":
     doAssert err.msg == "test foo"
     inc checked
   doAssert checked == 1
+
+testAsync "big_payload":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(testHelloPath)
+    with stream:
+      var payload = ""
+      for i in 0 .. 123_123:
+        payload.add "abcdefg"[i mod 7]
+      await stream.sendMessage(HelloRequest(name: payload))
+      let reply = await stream.recvMessage(HelloReply)
+      doAssert reply.message == "Hello, " & payload
+      inc checked
+  doAssert checked == 1
+
+testAsync "big_payload_stream":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(testHelloBidiPath)
+    with stream:
+      var payload = ""
+      for i in 0 .. 123_123:
+        payload.add "abcdefg"[i mod 7]
+      for i in 0 .. 2:
+        await stream.sendMessage(HelloRequest(name: payload & $i))
+        let reply = await stream.recvMessage(HelloReply)
+        doAssert reply.message == "Hello, " & payload & $i
+        inc checked
+  doAssert checked == 3

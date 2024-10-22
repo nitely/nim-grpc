@@ -18,11 +18,19 @@ proc testHello(strm: GrpcStream) {.async.} =
     HelloReply(message: "Hello, " & request.name)
   )
 
+proc testHelloBidi(strm: GrpcStream) {.async.} =
+  whileRecvMessages strm:
+    let request = await strm.recvMessage(HelloRequest)
+    await strm.sendMessage(
+      HelloReply(message: "Hello, " & request.name)
+    )
+
 proc main() {.async.} =
   echo "Serving forever"
   let server = newServer(localHost, localPort, certFile, keyFile)
   await server.serve({
     "/helloworld.Greeter/TestHello": testHello.GrpcCallback,
+    "/helloworld.Greeter/TestHelloBidi": testHelloBidi.GrpcCallback,
   }.newtable)
 
 waitFor main()
