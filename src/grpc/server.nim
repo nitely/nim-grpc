@@ -79,7 +79,7 @@ proc processStream(
       check strm.isRecvEmpty(), newGrpcFailure stcInternal
       if not strm.trailersSent:
         await strm.sendTrailers(stcOk)
-        await strm.sendNoError()
+      await strm.sendNoError()
     except GrpcRemoteFailure as err:
       raise err
     except GrpcFailure as err:
