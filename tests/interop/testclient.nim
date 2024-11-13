@@ -226,8 +226,7 @@ testAsync "server_streaming":
             ResponseParameters(size: 2653),
             ResponseParameters(size: 58979),
           ]
-        ),
-        finish = true
+        )
       )
       var sizes = newSeq[int]()
       whileRecvMessages stream:
@@ -250,8 +249,7 @@ when testCompression:
               ResponseParameters(size: 31415, compressed: boolTrue),
               ResponseParameters(size: 92653, compressed: boolFalse),
             ]
-          ),
-          finish = true
+          )
         )
         var sizes = newSeq[int]()
         var compr = newSeq[bool]()

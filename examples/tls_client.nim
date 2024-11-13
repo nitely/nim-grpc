@@ -20,7 +20,7 @@ proc main() {.async.} =
       echo "Stream reply"
       let stream = client.newGrpcStream("/helloworld.Greeter/SayHelloStreamReply")
       with stream:
-        await stream.sendMessage(HelloRequest(name: "you"), finish = true)
+        await stream.sendMessage(HelloRequest(name: "you"))
         var i = 0
         whileRecvMessages stream:
           let reply = await stream.recvMessage(HelloReply)
