@@ -135,6 +135,11 @@ proc sendCancel*(strm: GrpcStream) {.async.} =
 proc sendNoError*(strm: GrpcStream) {.async.} =
   tryHyperx await strm.stream.cancel(errNoError)
 
+proc isRecvEmpty*(strm: GrpcStream): bool =
+  ## Return whether there is data left in the buffer.
+  ## Even if true, recv may not have ended.
+  result = strm.buff[].len == 0
+
 proc recvEnded*(strm: GrpcStream): bool =
   result = strm.stream.recvEnded and strm.buff[].len == 0
 
