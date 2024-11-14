@@ -76,8 +76,7 @@ proc processStream(
       if reqHeaders.timeout > 0:
         deadlineFut = deadlineTask(strm, reqHeaders.timeout)
       await routes[reqHeaders.path](strm)
-      if not strm.canceled:
-        check strm.isRecvEmpty(), newGrpcFailure stcInternal
+      check strm.isRecvEmpty() or strm.canceled, newGrpcFailure stcInternal
       if not strm.trailersSent:
         await strm.sendTrailers(stcOk)
     except GrpcRemoteFailure as err:
