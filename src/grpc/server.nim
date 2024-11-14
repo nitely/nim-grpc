@@ -79,20 +79,18 @@ proc processStream(
       check strm.isRecvEmpty(), newGrpcFailure stcInternal
       if not strm.trailersSent:
         await strm.sendTrailers(stcOk)
-      await strm.sendNoError()
     except GrpcRemoteFailure as err:
       raise err
     except GrpcFailure as err:
       if not strm.trailersSent:
         await failSilently strm.sendTrailers(err.code, err.message)
-        await failSilently strm.sendNoError()
       raise err
     except CatchableError as err:
       if not strm.trailersSent:
         await failSilently strm.sendTrailers(stcInternal)
-        await failSilently strm.sendNoError()
       raise err
     finally:
+      await failSilently strm.sendNoError()
       strm.ended = true
       if strm.deadlineEx:
         await failSilently deadlineFut
