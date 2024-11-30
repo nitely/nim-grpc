@@ -54,7 +54,7 @@ template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient
   var failure = false
   var failureCode = stcInternal
-  var deadlineFut: Future[void]
+  var deadlineFut: Future[void] = nil
   if strm.timeout > 0:
     deadlineFut = deadlineTask(strm)
   try:

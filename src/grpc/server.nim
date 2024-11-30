@@ -67,7 +67,7 @@ proc processStream(
   strm: GrpcStream, routes: GrpcRoutes
 ) {.async.} =
   with strm.stream:
-    var deadlineFut: Future[void]
+    var deadlineFut: Future[void] = nil
     try:
       await strm.recvHeaders()
       let reqHeaders = toRequestHeaders strm.headers[]
