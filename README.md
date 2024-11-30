@@ -18,22 +18,14 @@ nimble install grpc
 
 - OpenSSL
 
+# Usage
+
+Read the examples and the interop tests.
+
 ## Debugging
 
 The `-d:grpcDebug` define will print debugging
 messages and error traces
-
-## ToDo
-
-- [x] Client
-- [x] Server
-- [x] Compression
-- [x] Interop tests
-- [x] TLS / non-TLS
-- [ ] Code gen proto Service
-- [ ] JSON
-- [ ] UDS
-- [ ] Auth
 
 ## LICENSE
 
