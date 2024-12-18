@@ -19,20 +19,12 @@ template debugInfo*(s: untyped): untyped =
 template tryHyperx*(body: untyped): untyped =
   try:
     body
-  except StrmError as err:
+  except HyperxError as err:
     debugInfo err.getStackTrace()
     debugInfo err.msg
     raise case err.typ
-      of hxLocalErr: newGrpcFailure(err.code.toStatusCode)
-      of hxRemoteErr: newGrpcRemoteFailure(err.code.toStatusCode)
-  except ConnError as err:
-    debugInfo err.getStackTrace()
-    debugInfo err.msg
-    raise newGrpcFailure(err.code.toStatusCode)
-  except HyperxError:
-    debugInfo getCurrentException().getStackTrace()
-    debugInfo getCurrentException().msg
-    raise newGrpcFailure()
+      of hyxLocalErr: newGrpcFailure(err.code.toGrpcStatusCode)
+      of hyxRemoteErr: newGrpcRemoteFailure(err.code.toGrpcStatusCode)
 
 template tryCatch*(body: untyped): untyped =
   try:

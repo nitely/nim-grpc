@@ -98,8 +98,8 @@ func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
   return newSeqRef(headers)
 
 proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
-  check not strm.deadlineEx, newGrpcFailure stcDeadlineEx
-  check not strm.canceled, newGrpcFailure stcCancelled
+  check not strm.deadlineEx, newGrpcFailure grpcDeadlineEx
+  check not strm.canceled, newGrpcFailure grpcCancelled
   check not strm.headersSent
   strm.headersSent = true
   tryHyperx await strm.stream.sendHeaders(headers[], finish = false)
@@ -112,8 +112,8 @@ proc sendMessage*(
 ) {.async.} =
   if not strm.headersSent:
     await strm.sendHeaders()
-  check not strm.deadlineEx, newGrpcFailure stcDeadlineEx
-  check not strm.canceled, newGrpcFailure stcCancelled
+  check not strm.deadlineEx, newGrpcFailure grpcDeadlineEx
+  check not strm.canceled, newGrpcFailure grpcCancelled
   tryHyperx await strm.stream.sendBody(data, finish)
 
 proc sendMessage*[T](
@@ -130,10 +130,10 @@ proc sendEnd*(strm: GrpcStream): Future[void] =
 proc sendCancel*(strm: GrpcStream) {.async.} =
   # XXX maybe just raise cancel error here
   strm.canceled = true
-  tryHyperx await strm.stream.cancel(errCancel)
+  tryHyperx await strm.stream.cancel(hyxCancel)
 
 proc sendNoError*(strm: GrpcStream) {.async.} =
-  tryHyperx await strm.stream.cancel(errNoError)
+  tryHyperx await strm.stream.cancel(hyxNoError)
 
 proc isRecvEmpty*(strm: GrpcStream): bool =
   ## Return whether there is data left in the buffer.
@@ -145,7 +145,7 @@ proc recvEnded*(strm: GrpcStream): bool =
 
 proc recvHeaders*(strm: GrpcStream) {.async.} =
   doAssert strm.headers[].len == 0
-  #check not strm.canceled, newGrpcFailure stcCancelled
+  #check not strm.canceled, newGrpcFailure grpcCancelled
   tryHyperx await strm.stream.recvHeaders(strm.headers)
 
 func recordSize(data: string): int =
@@ -175,7 +175,7 @@ proc recvMessage*(
   if strm.headers[].len == 0:
     await strm.recvHeaders()
   while not strm.stream.recvEnded and not strm.buff[].hasFullRecord:
-    #check not strm.canceled, newGrpcFailure stcCancelled
+    #check not strm.canceled, newGrpcFailure grpcCancelled
     tryHyperx await strm.stream.recvBody(strm.buff)
   check strm.buff[].hasFullRecord or strm.buff[].len == 0
   let L = strm.buff[].recordSize

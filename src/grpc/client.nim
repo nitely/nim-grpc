@@ -53,7 +53,7 @@ proc deadlineTask(strm: GrpcStream) {.async.} =
 template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient
   var failure = false
-  var failureCode = stcInternal
+  var failureCode = grpcInternal
   var deadlineFut: Future[void] = nil
   if strm.timeout > 0:
     deadlineFut = deadlineTask(strm)
@@ -62,7 +62,7 @@ template with*(strm: GrpcStream, body: untyped): untyped =
       try:
         block:
           body
-        check not strm.canceled, newGrpcFailure(stcCancelled)
+        check not strm.canceled, newGrpcFailure(grpcCancelled)
         if not strm.stream.sendEnded:
           await strm.sendEnd()
         if not strm.recvEnded:
@@ -87,7 +87,7 @@ template with*(strm: GrpcStream, body: untyped): untyped =
     failureCode = err.code
   strm.headers[].add strm.stream.recvTrailers
   debugInfo strm.headers[]
-  check not strm.deadlineEx, newGrpcFailure(stcDeadlineEx)
-  check not strm.canceled, newGrpcFailure(stcCancelled)
+  check not strm.deadlineEx, newGrpcFailure(grpcDeadlineEx)
+  check not strm.canceled, newGrpcFailure(grpcCancelled)
   checkResponseError(strm.headers[])
   check not failure, newGrpcFailure(failureCode)

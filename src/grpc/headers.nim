@@ -26,31 +26,31 @@ iterator headersIt*(s: string): (Slice[int], Slice[int]) {.inline.} =
     doAssert vb+2 > na
     na = vb+2  # skip /r/n
 
-func parseStatusCode(raw: openArray[char]): StatusCode =
+func parseStatusCode(raw: openArray[char]): GrpcStatusCode =
   if raw.len notin 1 .. 2:
-    return stcUnknown
+    return grpcUnknown
   var code = 0
   for i in 0 .. raw.len-1:
     if raw[i].ord in '0'.ord .. '9'.ord:
       code = code * 10 + (raw[i].ord - '0'.ord)
     else:
-      return stcUnknown
+      return grpcUnknown
   if code > 16:
-    return stcUnknown
-  return code.StatusCode
+    return grpcUnknown
+  return code.GrpcStatusCode
 
 type ResponseHeaders* = ref object
-  status*: StatusCode
+  status*: GrpcStatusCode
   statusMsg*: string
 
-func newResponseHeaders(status: StatusCode): ResponseHeaders =
+func newResponseHeaders(status: GrpcStatusCode): ResponseHeaders =
   ResponseHeaders(
     status: status,
     statusMsg: ""
   )
 
 func toResponseHeaders*(s: string): ResponseHeaders =
-  result = newResponseHeaders(stcUnknown)
+  result = newResponseHeaders(grpcUnknown)
   for (nn, vv) in headersIt s:
     if toOpenArray(s, nn.a, nn.b) == "grpc-status":
       result.status = parseStatusCode toOpenArray(s, vv.a, vv.b)
@@ -59,7 +59,7 @@ func toResponseHeaders*(s: string): ResponseHeaders =
 
 func checkResponseError*(s: string) {.raises: [GrpcResponseError].} =
   let r = toResponseHeaders s
-  if r.status != stcOk:
+  if r.status != grpcOk:
     raise newGrpcResponseError(r.status, r.statusMsg)
 
 func toMillis(tt: int, unit: char): int {.raises: [GrpcFailure].} =

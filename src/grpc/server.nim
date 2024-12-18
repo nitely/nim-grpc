@@ -25,7 +25,7 @@ type
   GrpcCallback* = proc(strm: GrpcStream) {.async.}
   GrpcRoutes* = TableRef[string, GrpcCallback]
 
-func trailersOut*(strm: GrpcStream, status: StatusCode, msg = ""): Headers =
+func trailersOut*(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Headers =
   result = newSeqRef[(string, string)]()
   result[].add ("grpc-status", $status)
   if msg.len > 0:
@@ -43,10 +43,10 @@ proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
     headers2[].add headers[]
   tryHyperx await strm.stream.sendHeaders(headers2[], finish = true)
 
-proc sendTrailers(strm: GrpcStream, status: StatusCode, msg = ""): Future[void] =
+proc sendTrailers(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Future[void] =
   strm.sendTrailers(strm.trailersOut(status, msg))
 
-proc sendCancel*(strm: GrpcStream, status: StatusCode) {.async.} =
+proc sendCancel*(strm: GrpcStream, status: GrpcStatusCode) {.async.} =
   await strm.sendTrailers(status)
   await failSilently strm.sendCancel()
 
@@ -60,7 +60,7 @@ proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
   strm.deadlineEx = not strm.ended
   if strm.deadlineEx:
     if not strm.trailersSent:
-      await failSilently strm.sendTrailers(stcDeadlineEx)
+      await failSilently strm.sendTrailers(grpcDeadlineEx)
       await failSilently strm.sendCancel()
 
 proc processStream(
@@ -72,13 +72,13 @@ proc processStream(
       await strm.recvHeaders()
       let reqHeaders = toRequestHeaders strm.headers[]
       strm.compress = reqHeaders.compress
-      check reqHeaders.path in routes, newGrpcFailure stcNotFound
+      check reqHeaders.path in routes, newGrpcFailure grpcNotFound
       if reqHeaders.timeout > 0:
         deadlineFut = deadlineTask(strm, reqHeaders.timeout)
       await routes[reqHeaders.path](strm)
-      check strm.isRecvEmpty() or strm.canceled, newGrpcFailure stcInternal
+      check strm.isRecvEmpty() or strm.canceled, newGrpcFailure grpcInternal
       if not strm.trailersSent:
-        await strm.sendTrailers(stcOk)
+        await strm.sendTrailers(grpcOk)
     except GrpcRemoteFailure as err:
       raise err
     except GrpcFailure as err:
@@ -87,7 +87,7 @@ proc processStream(
       raise err
     except CatchableError as err:
       if not strm.trailersSent:
-        await failSilently strm.sendTrailers(stcInternal)
+        await failSilently strm.sendTrailers(grpcInternal)
       raise err
     finally:
       await failSilently strm.sendNoError()
