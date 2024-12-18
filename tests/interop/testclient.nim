@@ -84,7 +84,7 @@ when testCompression:
           discard await stream.recvMessage(SimpleResponse)
           doAssert false
       except GrpcResponseError as err:
-        doAssert err.code == stcInvalidArg
+        doAssert err.code == grpcInvalidArg
         inc checked
       block:
         let stream = client.newGrpcStream(unaryCallPath)
@@ -186,7 +186,7 @@ when testCompression:
           discard await stream.recvMessage(StreamingInputCallResponse)
           doAssert false
       except GrpcResponseError as err:
-        doAssert err.code == stcInvalidArg
+        doAssert err.code == grpcInvalidArg
         inc checked
       block:
         let stream = client.newGrpcStream(streamingInputCallPath, compress = true)
@@ -423,7 +423,7 @@ testAsync "unimplemented_method":
         discard await stream.recvMessage(Empty)
         doAssert false
     except GrpcResponseError as err:
-      doAssert err.code == stcUnimplemented
+      doAssert err.code == grpcUnimplemented
       inc checked
   doAssert checked == 1
 
@@ -440,7 +440,7 @@ testAsync "unimplemented_service":
         discard await stream.recvMessage(Empty)
         doAssert false
     except GrpcResponseError as err:
-      doAssert err.code == stcUnimplemented
+      doAssert err.code == grpcUnimplemented
       inc checked
   doAssert checked == 1
 
@@ -454,7 +454,7 @@ testAsync "cancel_after_begin":
         await stream.sendHeaders()
         await stream.sendCancel()
     except GrpcFailure as err:
-      doAssert err.code == stcCancelled, $err.code
+      doAssert err.code == grpcCancelled, $err.code
       inc checked
   doAssert checked == 1
 
@@ -476,7 +476,7 @@ testAsync "cancel_after_first_response":
         await stream.sendCancel()
         inc checked
     except GrpcFailure as err:
-      doAssert err.code == stcCancelled, $err.code
+      doAssert err.code == grpcCancelled, $err.code
       inc checked
   doAssert checked == 2
 
@@ -497,6 +497,6 @@ testAsync "timeout_on_sleeping_server":
         whileRecvMessages stream:
           discard await stream.recvMessage(StreamingOutputCallResponse)
     except GrpcFailure as err:
-      doAssert err.code == stcDeadlineEx, $err.code
+      doAssert err.code == grpcDeadlineEx, $err.code
       inc checked
   doAssert checked == 1

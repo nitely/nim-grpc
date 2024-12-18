@@ -31,7 +31,7 @@ proc echoMetadataInitial(strm: GrpcStream) {.async.} =
     await strm.sendHeaders(headersOut)
 
 proc echoMetadataTrailing(strm: GrpcStream) {.async.} =
-  var headersOut = strm.trailersOut(stcOk)
+  var headersOut = strm.trailersOut(grpcOk)
   let oldLen = headersOut[].len
   for (nn, vv) in headersIt strm.headers[]:
     if toOpenArray(strm.headers[], nn.a, nn.b) == "x-grpc-test-echo-trailing-bin":
@@ -47,7 +47,7 @@ proc unaryCall(strm: GrpcStream) {.async.} =
   await strm.echoMetadataInitial()
   let (compressed, request) = await strm.recvMessage2(SimpleRequest)
   check compressed == request.expectCompressed.value,
-    newGrpcFailure(stcInvalidArg)
+    newGrpcFailure(grpcInvalidArg)
   check request.responseStatus.code == 0,
     newGrpcFailure(
       request.responseStatus.code.StatusCode,
@@ -66,7 +66,7 @@ proc streamingInputCall(strm: GrpcStream) {.async.} =
   whileRecvMessages strm:
     let (compressed, request) = await strm.recvMessage2(StreamingInputCallRequest)
     check compressed == request.expectCompressed.value,
-      newGrpcFailure(stcInvalidArg)
+      newGrpcFailure(grpcInvalidArg)
     size += request.payload.body.len
   await strm.sendMessage(StreamingInputCallResponse(
     aggregatedPayloadSize: size.int32
@@ -98,7 +98,7 @@ proc fullDuplexCall(strm: GrpcStream) {.async.} =
   await strm.echoMetadataTrailing()
 
 proc unimplementedCall(strm: GrpcStream) {.async.} =
-  raise newGrpcFailure(stcUnimplemented)
+  raise newGrpcFailure(grpcUnimplemented)
 
 proc main() {.async.} =
   echo "Serving forever"
