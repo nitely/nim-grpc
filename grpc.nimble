@@ -9,7 +9,7 @@ skipDirs = @["tests", "examples"]
 
 requires "nim >= 2.0.8"
 #requires "hyperx >= 0.1.39"
-requires "hyperx == https://github.com/nitely/nim-hyperx#head"
+requires "hyperx == https://github.com/nitely/nim-hyperx"
 requires "protobuf_serialization >= 0.3.0"
 requires "zippy >= 0.10.14"
 
