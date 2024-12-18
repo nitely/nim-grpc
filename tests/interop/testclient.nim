@@ -368,7 +368,7 @@ testAsync "status_code_and_message":
         discard await stream.recvMessage(SimpleResponse)
         doAssert false
     except GrpcResponseError as err:
-      doAssert err.code == 2.StatusCode
+      doAssert err.code == 2.GrpcStatusCode
       doAssert err.message == "test status message"
       inc checked
     try:
@@ -384,7 +384,7 @@ testAsync "status_code_and_message":
         discard await stream.recvMessage(StreamingOutputCallResponse)
         doAssert false
     except GrpcResponseError as err:
-      doAssert err.code == 2.StatusCode
+      doAssert err.code == 2.GrpcStatusCode
       doAssert err.message == "test status message"
       inc checked
   doAssert checked == 2
@@ -405,7 +405,7 @@ testAsync "special_status_message":
         discard await stream.recvMessage(SimpleResponse)
         doAssert false
     except GrpcResponseError as err:
-      doAssert err.code == 2.StatusCode
+      doAssert err.code == 2.GrpcStatusCode
       doAssert err.message == expectedMessage
       inc checked
   doAssert checked == 1

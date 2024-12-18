@@ -50,7 +50,7 @@ proc unaryCall(strm: GrpcStream) {.async.} =
     newGrpcFailure(grpcInvalidArg)
   check request.responseStatus.code == 0,
     newGrpcFailure(
-      request.responseStatus.code.StatusCode,
+      request.responseStatus.code.GrpcStatusCode,
       request.responseStatus.message
     )
   await strm.sendMessage(
@@ -88,7 +88,7 @@ proc fullDuplexCall(strm: GrpcStream) {.async.} =
     let request = await strm.recvMessage(StreamingOutputCallRequest)
     check request.responseStatus.code == 0,
       newGrpcFailure(
-        request.responseStatus.code.StatusCode,
+        request.responseStatus.code.GrpcStatusCode,
         request.responseStatus.message
       )
     for rp in request.responseParameters:
