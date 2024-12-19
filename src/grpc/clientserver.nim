@@ -218,5 +218,4 @@ proc failSilently*(fut: Future[void]) {.async.} =
     if fut != nil:
       await fut
   except HyperxError, GrpcFailure:
-    debugInfo getCurrentException().msg
-    debugInfo getCurrentException().getStackTrace()
+    debugErr getCurrentException()

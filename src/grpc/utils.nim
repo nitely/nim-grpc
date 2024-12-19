@@ -8,6 +8,35 @@ import ./protobuf
 import ./errors
 import ./statuscodes
 
+func stackTrace2(err: ref Exception): string {.raises: [].} =
+  doAssert err != nil
+  result = ""
+  result.add err.getStackTrace
+  result.add "Error: "
+  result.add err.msg
+  result.add " ["
+  result.add err.name
+  result.add ']'
+
+func fulltrace(err: ref Exception): string {.raises: [].} =
+  doAssert err != nil
+  result = ""
+  var e = err
+  while e != nil:
+    result.add e.stackTrace2()
+    if e.parent != nil:
+      result.add "\nreraised from:\n"
+    e = e.parent
+
+func trace*(err: ref GrpcFailure): string {.raises: [].} =
+  fulltrace err
+
+func debugErr*(err: ref Exception) =
+  when defined(grpcDebug) or defined(grpcDebugErr):
+    debugEcho fulltrace(err)
+  else:
+    discard
+
 template debugInfo*(s: untyped): untyped =
   when defined(grpcDebug):
     # hide "s" expresion side effcets
@@ -20,19 +49,17 @@ template tryHyperx*(body: untyped): untyped =
   try:
     body
   except HyperxError as err:
-    debugInfo err.getStackTrace()
-    debugInfo err.msg
+    debugErr err
     raise case err.typ
-      of hyxLocalErr: newGrpcFailure(err.code.toGrpcStatusCode)
-      of hyxRemoteErr: newGrpcRemoteFailure(err.code.toGrpcStatusCode)
+      of hyxLocalErr: newGrpcFailure(err.code.toGrpcStatusCode, parent = err)
+      of hyxRemoteErr: newGrpcRemoteFailure(err.code.toGrpcStatusCode, parent = err)
 
 template tryCatch*(body: untyped): untyped =
   try:
     body
-  except CatchableError:
-    debugInfo getCurrentException().getStackTrace()
-    debugInfo getCurrentException().msg
-    raise newGrpcFailure()
+  except CatchableError as err:
+    debugErr err
+    raise newGrpcFailure(parent = err)
 
 template check*(cond: untyped): untyped =
   {.line: instantiationInfo(fullPaths = true).}:
