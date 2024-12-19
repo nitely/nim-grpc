@@ -26,7 +26,8 @@ export
   headersOut,
   sendHeaders,
   GrpcTimeoutUnit,
-  protobuf
+  protobuf,
+  trace
 
 func timeoutMillis(strm: GrpcStream): int {.raises: [].} =
   template tt: untyped = strm.timeout
@@ -77,12 +78,10 @@ template with*(strm: GrpcStream, body: untyped): untyped =
           await failSilently strm.sendCancel()
   except GrpcRemoteFailure:
     # grpc-go server sends Rst no_error but trailer status is ok
-    debugInfo getCurrentException().getStackTrace()
-    debugInfo getCurrentException().msg
+    debugErr getCurrentException()
     discard
   except GrpcFailure as err:
-    debugInfo err.getStackTrace()
-    debugInfo err.msg
+    debugErr err
     failure = true
     failureCode = err.code
   strm.headers[].add strm.stream.recvTrailers

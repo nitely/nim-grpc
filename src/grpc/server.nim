@@ -19,7 +19,8 @@ export
   GrpcStream,
   headersOut,
   sendHeaders,
-  protobuf
+  protobuf,
+  trace
 
 type
   GrpcCallback* = proc(strm: GrpcStream) {.async.}
@@ -104,11 +105,9 @@ proc processStreamHandler(
   try:
     await processStream(strm, routes)
   except GrpcFailure:
-    debugInfo getCurrentException().getStackTrace()
-    debugInfo getCurrentException().msg
+    debugErr getCurrentException()
   except CatchableError:
-    debugInfo getCurrentException().getStackTrace()
-    debugInfo getCurrentException().msg
+    debugErr getCurrentException()
 
 proc processClient(
   client: ClientContext,
@@ -126,8 +125,7 @@ proc processClientHandler(
   try:
     await processClient(client, routes)
   except CatchableError:
-    debugInfo getCurrentException().getStackTrace()
-    debugInfo getCurrentException().msg
+    debugErr getCurrentException()
 
 proc serve*(server: ServerContext, routes: GrpcRoutes) {.async.} =
   with server:

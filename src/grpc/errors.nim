@@ -10,17 +10,21 @@ type
   GrpcResponseError* = object of GrpcRemoteFailure
 
 func newGrpcFailure*(
-  code: GrpcStatusCode, message = ""
+  code: GrpcStatusCode, message = "", parent: ref Exception = nil
 ): ref GrpcFailure {.raises: [].} =
-  result = (ref GrpcFailure)(msg: code.name, code: code, message: message)
+  result = (ref GrpcFailure)(
+    msg: code.name, code: code, message: message, parent: parent
+  )
 
-func newGrpcFailure*(): ref GrpcFailure {.raises: [].} =
-  result = newGrpcFailure(grpcInternal)
+func newGrpcFailure*(parent: ref Exception = nil): ref GrpcFailure {.raises: [].} =
+  result = newGrpcFailure(grpcInternal, parent = parent)
 
 func newGrpcRemoteFailure*(
-  code: GrpcStatusCode, message = ""
+  code: GrpcStatusCode, message = "", parent: ref Exception = nil
 ): ref GrpcRemoteFailure {.raises: [].} =
-  result = (ref GrpcRemoteFailure)(msg: code.name, code: code, message: message)
+  result = (ref GrpcRemoteFailure)(
+    msg: code.name, code: code, message: message, parent: parent
+  )
 
 func newGrpcNoMessageException*(): ref GrpcNoMessageException {.raises: [].} =
   result = (ref GrpcNoMessageException)(
