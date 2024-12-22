@@ -23,7 +23,7 @@ export
   trace
 
 type
-  GrpcCallback* = proc(strm: GrpcStream) {.async.}
+  GrpcCallback* = proc(strm: GrpcStream): Future[void] {.closure, gcsafe.}
   GrpcRoutes* = TableRef[string, GrpcCallback]
 
 func trailersOut*(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Headers =
