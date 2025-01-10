@@ -11,14 +11,14 @@ proc main() {.async.} =
   with client:
     block:
       echo "Simple request"
-      let stream = client.newGrpcStream("/helloworld.Greeter/SayHello")
+      let stream = client.newGrpcStream(GreeterSayHelloPath)
       with stream:
         await stream.sendMessage(HelloRequest(name: "you"))
         let reply = await stream.recvMessage(HelloReply)
         doAssert reply.message == "Hello, you"
     block:
       echo "Stream reply"
-      let stream = client.newGrpcStream("/helloworld.Greeter/SayHelloStreamReply")
+      let stream = client.newGrpcStream(GreeterSayHelloStreamReplyPath)
       with stream:
         await stream.sendMessage(HelloRequest(name: "you"))
         var i = 0
@@ -29,7 +29,7 @@ proc main() {.async.} =
         doAssert i == 3
     block:
       echo "Bidirectional stream"
-      let stream = client.newGrpcStream("/helloworld.Greeter/SayHelloBidiStream")
+      let stream = client.newGrpcStream(GreeterSayHelloBidiStreamPath)
       with stream:
         for i in 0 .. 2:
           await stream.sendMessage(HelloRequest(name: "count " & $i))

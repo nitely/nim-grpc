@@ -19,8 +19,8 @@ template testAsync(name: string, body: untyped): untyped =
 
 const localHost = "127.0.0.1"
 const localPort = Port 8114
-const testHelloPath = "/helloworld.Greeter/TestHello"
-const testHelloBidiPath = "/helloworld.Greeter/TestHelloBidi"
+const testHelloPath = GreeterTestHelloPath
+const testHelloBidiPath = GreeterTestHelloBidiPath
 
 testAsync "simple_request":
   var checked = 0

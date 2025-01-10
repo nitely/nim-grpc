@@ -107,13 +107,13 @@ proc main() {.async.} =
   else:
     newServer(localHost, localPort, ssl = testSsl)
   await server.serve({
-    "/grpc.testing.TestService/EmptyCall": emptyCall.GrpcCallback,
-    "/grpc.testing.TestService/UnaryCall": unaryCall.GrpcCallback,
-    "/grpc.testing.TestService/StreamingInputCall": streamingInputCall.GrpcCallback,
-    "/grpc.testing.TestService/StreamingOutputCall": streamingOutputCall.GrpcCallback,
-    "/grpc.testing.TestService/FullDuplexCall": fullDuplexCall.GrpcCallback,
-    "/grpc.testing.TestService/UnimplementedCall": unimplementedCall.GrpcCallback,
-    "/grpc.testing.UnimplementedService/UnimplementedCall": unimplementedCall.GrpcCallback,
+    TestServiceEmptyCallPath: emptyCall.GrpcCallback,
+    TestServiceUnaryCallPath: unaryCall.GrpcCallback,
+    TestServiceStreamingInputCallPath: streamingInputCall.GrpcCallback,
+    TestServiceStreamingOutputCallPath: streamingOutputCall.GrpcCallback,
+    TestServiceFullDuplexCallPath: fullDuplexCall.GrpcCallback,
+    TestServiceUnimplementedCallPath: unimplementedCall.GrpcCallback,
+    UnimplementedServiceUnimplementedCallPath: unimplementedCall.GrpcCallback,
   }.newtable)
 
 waitFor main()

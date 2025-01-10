@@ -29,8 +29,8 @@ proc main() {.async.} =
   echo "Serving forever"
   let server = newServer(localHost, localPort, certFile, keyFile)
   await server.serve({
-    "/helloworld.Greeter/TestHello": testHello.GrpcCallback,
-    "/helloworld.Greeter/TestHelloBidi": testHelloBidi.GrpcCallback,
+    GreeterTestHelloPath: testHello.GrpcCallback,
+    GreeterTestHelloBidiPath: testHelloBidi.GrpcCallback,
   }.newtable)
 
 waitFor main()

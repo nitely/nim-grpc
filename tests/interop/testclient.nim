@@ -39,7 +39,7 @@ testAsync "empty_unary":
   var client = newClient(localHost, localPort, ssl = testSsl)
   with client:
     let stream = client.newGrpcStream(
-      "/grpc.testing.TestService/EmptyCall"
+      TestServiceEmptyCallPath
     )
     with stream:
       await stream.sendMessage(Empty())
@@ -47,7 +47,7 @@ testAsync "empty_unary":
       checked = true
   doAssert checked
 
-const unaryCallPath = "/grpc.testing.TestService/UnaryCall"
+const unaryCallPath = TestServiceUnaryCallPath
 
 testAsync "large_unary":
   var checked = false
@@ -147,7 +147,7 @@ when testCompression:
           inc checked
     doAssert checked == 2
 
-const streamingInputCallPath = "/grpc.testing.TestService/StreamingInputCall"
+const streamingInputCallPath = TestServiceStreamingInputCallPath
 
 testAsync "client_streaming":
   var checked = false
@@ -210,7 +210,7 @@ when testCompression:
           inc checked
     doAssert checked == 2
 
-const streamingOutputCall = "/grpc.testing.TestService/StreamingOutputCall"
+const streamingOutputCall = TestServiceStreamingOutputCallPath
 
 testAsync "server_streaming":
   var checked = 0
@@ -263,7 +263,7 @@ when testCompression:
         inc checked
     doAssert checked == 1
 
-const fullDuplexCallPath = "/grpc.testing.TestService/FullDuplexCall"
+const fullDuplexCallPath = TestServiceFullDuplexCallPath
 
 testAsync "ping_pong":
   var checked = 0
@@ -416,7 +416,7 @@ testAsync "unimplemented_method":
   with client:
     try:
       let stream = client.newGrpcStream(
-        "/grpc.testing.TestService/UnimplementedCall"
+        TestServiceUnimplementedCallPath
       )
       with stream:
         await stream.sendMessage(Empty())
@@ -433,7 +433,7 @@ testAsync "unimplemented_service":
   with client:
     try:
       let stream = client.newGrpcStream(
-        "/grpc.testing.UnimplementedService/UnimplementedCall"
+        UnimplementedServiceUnimplementedCallPath
       )
       with stream:
         await stream.sendMessage(Empty())
