@@ -1,5 +1,10 @@
 syntax = "proto3";
 
+service Greeter {
+  rpc TestHello (HelloRequest) returns (HelloReply) {}
+  rpc TestHelloBidi (stream HelloRequest) returns (stream HelloReply) {}
+}
+
 message HelloRequest {
   string name = 1;
 }
