@@ -1,6 +1,8 @@
 config.nims
 examples/tls_client
 examples/tls_server
+examples/insecure_client
+examples/insecure_server
 tests/interop/testserver
 tests/interop/testclient
 tests/testserver

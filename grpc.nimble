@@ -8,7 +8,7 @@ srcDir = "src"
 skipDirs = @["tests", "examples"]
 
 requires "nim >= 2.0.8"
-requires "hyperx >= 0.1.41"
+requires "hyperx >= 0.1.42"
 requires "https://github.com/nitely/nim-protobuf-serialization#471301dfb583a802768979e287ea2c2e51f203ab"
 requires "zippy >= 0.10.14"
 
@@ -20,6 +20,12 @@ task exampleserve, "Example serve":
 
 task exampleclient, "Example client":
   exec "nim c -r examples/tls_client.nim"
+
+task exampleserveinsecure, "Example serve insecure":
+  exec "nim c -r examples/insecure_server.nim"
+
+task exampleclientinsecure, "Example client insecure":
+  exec "nim c -r examples/insecure_client.nim"
 
 task testserve, "Test serve":
   exec "nim c -r tests/testserver.nim"
