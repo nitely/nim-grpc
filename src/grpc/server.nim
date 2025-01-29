@@ -25,6 +25,7 @@ export
 type
   GrpcCallback* = proc(strm: GrpcStream): Future[void] {.closure, gcsafe.}
   GrpcRoutes* = TableRef[string, GrpcCallback]
+  GrpcRoutes2* = seq[(string, GrpcCallback)]
 
 func trailersOut*(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Headers =
   result = newSeqRef[(string, string)]()
@@ -106,3 +107,6 @@ proc processStreamWrap(routes: GrpcRoutes): StreamCallback =
 
 proc serve*(server: ServerContext, routes: GrpcRoutes) {.async, gcsafe.} =
   await server.serve(processStreamWrap(routes))
+
+proc serve*(server: ServerContext, routes: GrpcRoutes2) {.async, gcsafe.} =
+  await server.serve(newTable(routes))

@@ -5,7 +5,6 @@
 
 from std/os import getEnv
 import std/asyncdispatch
-import std/tables
 
 from ../../src/grpc/clientserver import recvMessage2
 import ../../src/grpc/server
@@ -106,14 +105,14 @@ proc main() {.async.} =
     newServer(localHost, localPort, certFile, keyFile)
   else:
     newServer(localHost, localPort, ssl = testSsl)
-  await server.serve({
-    TestServiceEmptyCallPath: emptyCall.GrpcCallback,
-    TestServiceUnaryCallPath: unaryCall.GrpcCallback,
-    TestServiceStreamingInputCallPath: streamingInputCall.GrpcCallback,
-    TestServiceStreamingOutputCallPath: streamingOutputCall.GrpcCallback,
-    TestServiceFullDuplexCallPath: fullDuplexCall.GrpcCallback,
-    TestServiceUnimplementedCallPath: unimplementedCall.GrpcCallback,
-    UnimplementedServiceUnimplementedCallPath: unimplementedCall.GrpcCallback,
-  }.newtable)
+  await server.serve(@[
+    (TestServiceEmptyCallPath, emptyCall.GrpcCallback),
+    (TestServiceUnaryCallPath, unaryCall.GrpcCallback),
+    (TestServiceStreamingInputCallPath, streamingInputCall.GrpcCallback),
+    (TestServiceStreamingOutputCallPath, streamingOutputCall.GrpcCallback),
+    (TestServiceFullDuplexCallPath, fullDuplexCall.GrpcCallback),
+    (TestServiceUnimplementedCallPath, unimplementedCall.GrpcCallback),
+    (UnimplementedServiceUnimplementedCallPath, unimplementedCall.GrpcCallback),
+  ])
 
 waitFor main()

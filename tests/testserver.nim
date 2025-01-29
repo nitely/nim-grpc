@@ -2,7 +2,6 @@
 
 from std/os import getEnv
 import std/asyncdispatch
-import std/tables
 
 import ../src/grpc
 import ./pbtypes
@@ -28,9 +27,9 @@ proc testHelloBidi(strm: GrpcStream) {.async.} =
 proc main() {.async.} =
   echo "Serving forever"
   let server = newServer(localHost, localPort, certFile, keyFile)
-  await server.serve({
-    GreeterTestHelloPath: testHello.GrpcCallback,
-    GreeterTestHelloBidiPath: testHelloBidi.GrpcCallback,
-  }.newtable)
+  await server.serve(@[
+    (GreeterTestHelloPath, testHello.GrpcCallback),
+    (GreeterTestHelloBidiPath, testHelloBidi.GrpcCallback),
+  ])
 
 waitFor main()

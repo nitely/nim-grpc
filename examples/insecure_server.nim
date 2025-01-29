@@ -1,7 +1,6 @@
 ## non-TLS example; tls_server is more complete
 
 import std/asyncdispatch
-import std/tables
 
 import ../src/grpc
 import ./pbtypes
@@ -15,8 +14,8 @@ proc sayHello(strm: GrpcStream) {.async.} =
 proc main {.async.} =
   echo "Serving forever"
   let server = newServer("127.0.0.1", Port 8115, ssl = false)
-  await server.serve({
-    GreeterSayHelloPath: sayHello.GrpcCallback
-  }.newtable)
+  await server.serve(@[
+    (GreeterSayHelloPath, sayHello.GrpcCallback)
+  ])
 
 waitFor main()
