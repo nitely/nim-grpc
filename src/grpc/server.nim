@@ -67,68 +67,42 @@ proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
 proc processStream(
   strm: GrpcStream, routes: GrpcRoutes
 ) {.async.} =
-  with strm.stream:
-    var deadlineFut: Future[void] = nil
+  var deadlineFut: Future[void] = nil
+  try:
+    await strm.recvHeaders()
+    let reqHeaders = toRequestHeaders strm.headers[]
+    strm.compress = reqHeaders.compress
+    check reqHeaders.path in routes, newGrpcFailure grpcNotFound
+    if reqHeaders.timeout > 0:
+      deadlineFut = deadlineTask(strm, reqHeaders.timeout)
+    await routes[reqHeaders.path](strm)
+    check strm.isRecvEmpty() or strm.canceled, newGrpcFailure grpcInternal
+    if not strm.trailersSent:
+      await strm.sendTrailers(grpcOk)
+  except GrpcRemoteFailure as err:
+    raise err
+  except GrpcFailure as err:
+    if not strm.trailersSent:
+      await failSilently strm.sendTrailers(err.code, err.message)
+    raise err
+  except CatchableError as err:
+    if not strm.trailersSent:
+      await failSilently strm.sendTrailers(grpcInternal)
+    raise err
+  finally:
+    await failSilently strm.sendNoError()
+    strm.ended = true
+    if strm.deadlineEx:
+      await failSilently deadlineFut
+    elif deadlineFut != nil:
+      asyncCheck deadlineFut
+
+proc processStreamWrap(routes: GrpcRoutes): StreamCallback =
+  proc(strm: ClientStream) {.async, gcsafe.} =
     try:
-      await strm.recvHeaders()
-      let reqHeaders = toRequestHeaders strm.headers[]
-      strm.compress = reqHeaders.compress
-      check reqHeaders.path in routes, newGrpcFailure grpcNotFound
-      if reqHeaders.timeout > 0:
-        deadlineFut = deadlineTask(strm, reqHeaders.timeout)
-      await routes[reqHeaders.path](strm)
-      check strm.isRecvEmpty() or strm.canceled, newGrpcFailure grpcInternal
-      if not strm.trailersSent:
-        await strm.sendTrailers(grpcOk)
-    except GrpcRemoteFailure as err:
-      raise err
-    except GrpcFailure as err:
-      if not strm.trailersSent:
-        await failSilently strm.sendTrailers(err.code, err.message)
-      raise err
-    except CatchableError as err:
-      if not strm.trailersSent:
-        await failSilently strm.sendTrailers(grpcInternal)
-      raise err
-    finally:
-      await failSilently strm.sendNoError()
-      strm.ended = true
-      if strm.deadlineEx:
-        await failSilently deadlineFut
-      elif deadlineFut != nil:
-        asyncCheck deadlineFut
+      await processStream(newGrpcStream(strm), routes)
+    except CatchableError:
+      debugErr getCurrentException()
 
-proc processStreamHandler(
-  strm: GrpcStream,
-  routes: GrpcRoutes
-) {.async.} =
-  try:
-    await processStream(strm, routes)
-  except GrpcFailure:
-    debugErr getCurrentException()
-  except CatchableError:
-    debugErr getCurrentException()
-
-proc processClient(
-  client: ClientContext,
-  routes: GrpcRoutes
-) {.async.} =
-  with client:
-    while client.isConnected:
-      let strm = await client.recvStream()
-      asyncCheck processStreamHandler(newGrpcStream(strm), routes)
-
-proc processClientHandler(
-  client: ClientContext,
-  routes: GrpcRoutes
-) {.async.} =
-  try:
-    await processClient(client, routes)
-  except CatchableError:
-    debugErr getCurrentException()
-
-proc serve*(server: ServerContext, routes: GrpcRoutes) {.async.} =
-  with server:
-    while server.isConnected:
-      let client = await server.recvClient()
-      asyncCheck processClientHandler(client, routes)
+proc serve*(server: ServerContext, routes: GrpcRoutes) {.async, gcsafe.} =
+  await server.serve(processStreamWrap(routes))
