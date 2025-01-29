@@ -98,12 +98,12 @@ proc processStream(
       elif deadlineFut != nil:
         asyncCheck deadlineFut
 
-proc processStreamWrap(routes: static[GrpcRoutes]): StreamCallback =
-  proc processStream(strm: ClientStream) {.async, gcsafe.} =
+proc processStreamWrap(routes: GrpcRoutes): StreamCallback =
+  proc(strm: ClientStream) {.async, gcsafe.} =
     try:
       await processStream(newGrpcStream(strm), routes)
     except CatchableError:
       debugErr getCurrentException()
 
-proc serve*(server: ServerContext, routes: static[GrpcRoutes]) {.async.} =
+proc serve*(server: ServerContext, routes: GrpcRoutes) {.async.} =
   server.serve(processStreamWrap(routes))
