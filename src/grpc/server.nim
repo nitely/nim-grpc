@@ -106,4 +106,4 @@ proc processStreamWrap(routes: GrpcRoutes): StreamCallback =
       debugErr getCurrentException()
 
 proc serve*(server: ServerContext, routes: GrpcRoutes) {.async, gcsafe.} =
-  server.serve(processStreamWrap(routes))
+  await server.serve(processStreamWrap(routes))
