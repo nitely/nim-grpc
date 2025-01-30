@@ -103,3 +103,12 @@ jobs:
           (nimble interopserve &) && \
           sleep 10s && \
           nimble gointeroptest"
+    - name: Run Functional Tests
+      run: |
+        docker pull nimlang/nim:${{ matrix.nim }}
+        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
+        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
+          nimble install -y --depsOnly && \
+          (nimble testfuncserve &) && \
+          sleep 10s && \
+          nimble testfuncclient"

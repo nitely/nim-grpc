@@ -8,5 +8,7 @@ tests/interop/testserver
 tests/interop/testclient
 tests/testserver
 tests/testclient
+tests/functional/tmultithreadclient
+tests/functional/tmultithreadserver
 go_server
 go_client

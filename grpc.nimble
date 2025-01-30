@@ -30,6 +30,12 @@ task exampleclientinsecure, "Example client insecure":
 task exampleservemultithread, "Example serve multi-thread":
   exec "nim c -r examples/multi_thread_server.nim"
 
+task testfuncserve, "Test functional serve":
+  exec "nim c -r tests/functional/tmultithreadserver.nim"
+
+task testfuncclient, "Test functional client":
+  exec "nim c -r tests/functional/tmultithreadclient.nim"
+
 task testserve, "Test serve":
   exec "nim c -r tests/testserver.nim"
 
