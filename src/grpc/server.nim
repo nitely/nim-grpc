@@ -28,7 +28,7 @@ type
   GrpcRoutes2* = seq[(string, GrpcCallback)]
   GrpcSafeCallback* = proc(strm: GrpcStream): Future[void] {.nimcall, gcsafe.}
   GrpcSafeRoutes* = seq[(string, GrpcSafeCallback)]
-  GrpcSafeRoutes2* = ptr Table[string, GrpcSafeCallback]
+  GrpcSafeRoutes2 = ptr Table[string, GrpcSafeCallback]
 
 func trailersOut*(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Headers =
   result = newSeqRef[(string, string)]()
@@ -102,7 +102,7 @@ proc processStream(
       asyncCheck deadlineFut
 
 proc processStream(
-  strm: ClientStream, routes: GrpcRoutes
+  strm: ClientStream, routes: GrpcRoutes | GrpcSafeRoutes2
 ) {.async.} =
   try:
     await processStream(newGrpcStream(strm), routes)
@@ -118,14 +118,6 @@ proc serve*(server: ServerContext, routes: GrpcRoutes) {.async, gcsafe.} =
 
 proc serve*(server: ServerContext, routes: GrpcRoutes2) {.async, gcsafe.} =
   await server.serve(newTable(routes))
-
-proc processStream(
-  strm: ClientStream, routes: GrpcSafeRoutes2
-) {.async.} =
-  try:
-    await processStream(newGrpcStream(strm), routes)
-  except CatchableError:
-    debugErr getCurrentException()
 
 proc processStreamWrap(routes: static[GrpcSafeRoutes]): SafeStreamCallback =
   proc(strm: ClientStream): Future[void] {.nimcall, gcsafe.} =

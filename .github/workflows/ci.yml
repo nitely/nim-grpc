@@ -100,7 +100,7 @@ jobs:
           nimble install -y --depsOnly && \
           curl -JLO \"https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_client\" && \
           chmod +x ./go_client && \
-          (nimble interopserve &) && \
+          (nim c -r tests/interop/testserver.nim &) && \
           sleep 10s && \
           nimble gointeroptest"
     - name: Run Functional Tests
