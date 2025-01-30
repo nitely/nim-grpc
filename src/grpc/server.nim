@@ -24,9 +24,9 @@ export
 
 type
   GrpcCallback* = proc(strm: GrpcStream): Future[void] {.closure, gcsafe.}
-  GrpcSafeCallback* = proc(strm: GrpcStream): Future[void] {.nimcall, gcsafe.}
   GrpcRoutes* = Table[string, GrpcCallback]
   GrpcRoutes2* = seq[(string, GrpcCallback)]
+  GrpcSafeCallback* = proc(strm: GrpcStream): Future[void] {.nimcall, gcsafe.}
   GrpcSafeRoutes* = seq[(string, GrpcSafeCallback)]
 
 func trailersOut*(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Headers =
@@ -129,9 +129,14 @@ proc processStream(
   except CatchableError:
     debugErr getCurrentException()
 
+proc toGrpcRoutes(routes: GrpcSafeRoutes): GrpcRoutes {.compileTime.} =
+  result = default(GrpcRoutes)
+  for (path, cb) in routes:
+    result[path] = cb.GrpcCallback
+
 proc processStreamWrap(routes: static[GrpcSafeRoutes]): SafeStreamCallback =
   proc(strm: ClientStream): Future[void] {.nimcall, gcsafe.} =
-    const routes2 = routes.toTable
+    const routes2 = routes.toGrpcRoutes
     return processStream(strm, addr routes2)
 
 const defaultMaxConns = int.high

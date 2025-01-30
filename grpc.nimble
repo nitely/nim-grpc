@@ -27,6 +27,9 @@ task exampleserveinsecure, "Example serve insecure":
 task exampleclientinsecure, "Example client insecure":
   exec "nim c -r examples/insecure_client.nim"
 
+task exampleservemultithread, "Example serve multi-thread":
+  exec "nim c -r examples/multi_thread_server.nim"
+
 task testserve, "Test serve":
   exec "nim c -r tests/testserver.nim"
 

@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        nim: [2.0.8]
+        nim: [2.0.8, 2.2.0]
     steps:
     - uses: actions/checkout@v2
     - name: Run Interop Tests
@@ -23,7 +23,7 @@ jobs:
           apt update && \
           apt install -y make && \ 
           make install_mkcert && \
-          nimble install -y && \
+          nimble install -y --depsOnly && \
           (nimble interopserve &) && \
           sleep 10s && \
           nimble interoptest"
@@ -35,7 +35,7 @@ jobs:
           apt update && \
           apt install -y make && \ 
           make install_mkcert && \
-          nimble install -y && \
+          nimble install -y --depsOnly && \
           (nimble exampleserve &) && \
           sleep 10s && \
           nimble exampleclient"
@@ -47,8 +47,20 @@ jobs:
           apt update && \
           apt install -y make && \ 
           make install_mkcert && \
-          nimble install -y && \
+          nimble install -y --depsOnly && \
           (nimble exampleserveinsecure &) && \
+          sleep 10s && \
+          nimble exampleclientinsecure"
+    - name: Run multi-thread examples
+      run: |
+        docker pull nimlang/nim:${{ matrix.nim }}
+        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
+        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
+          apt update && \
+          apt install -y make && \ 
+          make install_mkcert && \
+          nimble install -y --depsOnly && \
+          (nimble exampleservemultithread &) && \
           sleep 10s && \
           nimble exampleclientinsecure"
     - name: Run Tests
@@ -59,7 +71,7 @@ jobs:
           apt update && \
           apt install -y make && \ 
           make install_mkcert && \
-          nimble install -y && \
+          nimble install -y --depsOnly && \
           (nimble testserve &) && \
           sleep 10s && \
           nimble testclient"
@@ -71,7 +83,7 @@ jobs:
           apt update && \
           apt install -y make && \ 
           make install_mkcert && \
-          nimble install -y && \
+          nimble install -y --depsOnly && \
           curl -JLO \"https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_server\" && \
           chmod +x ./go_server && \
           (nimble gointeropserve &) && \
@@ -85,7 +97,7 @@ jobs:
           apt update && \
           apt install -y make && \ 
           make install_mkcert && \
-          nimble install -y && \
+          nimble install -y --depsOnly && \
           curl -JLO \"https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_client\" && \
           chmod +x ./go_client && \
           (nimble interopserve &) && \
