@@ -24,10 +24,11 @@ export
 
 type
   GrpcCallback* = proc(strm: GrpcStream): Future[void] {.closure, gcsafe.}
-  GrpcRoutes* = Table[string, GrpcCallback]
+  GrpcRoutes* = TableRef[string, GrpcCallback]
   GrpcRoutes2* = seq[(string, GrpcCallback)]
   GrpcSafeCallback* = proc(strm: GrpcStream): Future[void] {.nimcall, gcsafe.}
   GrpcSafeRoutes* = seq[(string, GrpcSafeCallback)]
+  GrpcSafeRoutes2* = ptr Table[string, GrpcSafeCallback]
 
 func trailersOut*(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Headers =
   result = newSeqRef[(string, string)]()
@@ -68,7 +69,7 @@ proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
       await failSilently strm.sendCancel()
 
 proc processStream(
-  strm: GrpcStream, routes: ptr GrpcRoutes
+  strm: GrpcStream, routes: GrpcRoutes | GrpcSafeRoutes2
 ) {.async.} =
   var deadlineFut: Future[void] = nil
   try:
@@ -101,42 +102,34 @@ proc processStream(
       asyncCheck deadlineFut
 
 proc processStream(
-  strm: ClientStream, routes: ref GrpcRoutes
-) {.async.} =
-  GC_ref routes
-  try:
-    await processStream(newGrpcStream(strm), addr routes[])
-  except CatchableError:
-    debugErr getCurrentException()
-  finally:
-    GC_unref routes
-
-proc processStreamWrap(routes: ref GrpcRoutes): StreamCallback =
-  proc(strm: ClientStream): Future[void] {.closure, gcsafe.} =
-    processStream(strm, routes)
-
-proc serve*(server: ServerContext, routes: ref GrpcRoutes) {.async, gcsafe.} =
-  await server.serve(processStreamWrap(routes))
-
-proc serve*(server: ServerContext, routes: GrpcRoutes2) {.async, gcsafe.} =
-  await server.serve(newTable(routes))
-
-proc processStream(
-  strm: ClientStream, routes: ptr GrpcRoutes
+  strm: ClientStream, routes: GrpcRoutes
 ) {.async.} =
   try:
     await processStream(newGrpcStream(strm), routes)
   except CatchableError:
     debugErr getCurrentException()
 
-proc toGrpcRoutes(routes: GrpcSafeRoutes): GrpcRoutes {.compileTime.} =
-  result = default(GrpcRoutes)
-  for (path, cb) in routes:
-    result[path] = cb.GrpcCallback
+proc processStreamWrap(routes: GrpcRoutes): StreamCallback =
+  proc(strm: ClientStream): Future[void] {.closure, gcsafe.} =
+    processStream(strm, routes)
+
+proc serve*(server: ServerContext, routes: GrpcRoutes) {.async, gcsafe.} =
+  await server.serve(processStreamWrap(routes))
+
+proc serve*(server: ServerContext, routes: GrpcRoutes2) {.async, gcsafe.} =
+  await server.serve(newTable(routes))
+
+proc processStream(
+  strm: ClientStream, routes: GrpcSafeRoutes2
+) {.async.} =
+  try:
+    await processStream(newGrpcStream(strm), routes)
+  except CatchableError:
+    debugErr getCurrentException()
 
 proc processStreamWrap(routes: static[GrpcSafeRoutes]): SafeStreamCallback =
   proc(strm: ClientStream): Future[void] {.nimcall, gcsafe.} =
-    const routes2 = routes.toGrpcRoutes
+    const routes2 = routes.toTable
     return processStream(strm, addr routes2)
 
 const defaultMaxConns = int.high
