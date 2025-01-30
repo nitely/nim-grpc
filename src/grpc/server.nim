@@ -26,6 +26,9 @@ type
   GrpcCallback* = proc(strm: GrpcStream): Future[void] {.closure, gcsafe.}
   GrpcRoutes* = TableRef[string, GrpcCallback]
   GrpcRoutes2* = seq[(string, GrpcCallback)]
+  GrpcSafeCallback* = proc(strm: GrpcStream): Future[void] {.nimcall, gcsafe.}
+  GrpcSafeRoutes* = seq[(string, GrpcSafeCallback)]
+  GrpcSafeRoutes2 = ptr Table[string, GrpcSafeCallback]
 
 func trailersOut*(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Headers =
   result = newSeqRef[(string, string)]()
@@ -66,17 +69,17 @@ proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
       await failSilently strm.sendCancel()
 
 proc processStream(
-  strm: GrpcStream, routes: GrpcRoutes
+  strm: GrpcStream, routes: GrpcRoutes | GrpcSafeRoutes2
 ) {.async.} =
   var deadlineFut: Future[void] = nil
   try:
     await strm.recvHeaders()
     let reqHeaders = toRequestHeaders strm.headers[]
     strm.compress = reqHeaders.compress
-    check reqHeaders.path in routes, newGrpcFailure grpcNotFound
+    check reqHeaders.path in routes[], newGrpcFailure grpcNotFound
     if reqHeaders.timeout > 0:
       deadlineFut = deadlineTask(strm, reqHeaders.timeout)
-    await routes[reqHeaders.path](strm)
+    await routes[][reqHeaders.path](strm)
     check strm.isRecvEmpty() or strm.canceled, newGrpcFailure grpcInternal
     if not strm.trailersSent:
       await strm.sendTrailers(grpcOk)
@@ -98,15 +101,48 @@ proc processStream(
     elif deadlineFut != nil:
       asyncCheck deadlineFut
 
+proc processStream(
+  strm: ClientStream, routes: GrpcRoutes | GrpcSafeRoutes2
+) {.async.} =
+  try:
+    await processStream(newGrpcStream(strm), routes)
+  except CatchableError:
+    debugErr getCurrentException()
+
 proc processStreamWrap(routes: GrpcRoutes): StreamCallback =
-  proc(strm: ClientStream) {.async, gcsafe.} =
-    try:
-      await processStream(newGrpcStream(strm), routes)
-    except CatchableError:
-      debugErr getCurrentException()
+  proc(strm: ClientStream): Future[void] {.closure, gcsafe.} =
+    processStream(strm, routes)
 
 proc serve*(server: ServerContext, routes: GrpcRoutes) {.async, gcsafe.} =
   await server.serve(processStreamWrap(routes))
 
 proc serve*(server: ServerContext, routes: GrpcRoutes2) {.async, gcsafe.} =
   await server.serve(newTable(routes))
+
+proc processStreamWrap(routes: static[GrpcSafeRoutes]): SafeStreamCallback =
+  proc(strm: ClientStream): Future[void] {.nimcall, gcsafe.} =
+    const routes2 = routes.toTable
+    return processStream(strm, addr routes2)
+
+const defaultMaxConns = int.high
+
+proc run*(
+  hostname: string,
+  port: Port,
+  routes: static[GrpcSafeRoutes],
+  sslCertFile = "",
+  sslKeyFile = "",
+  maxConnections = defaultMaxConns,
+  threads = 1,
+  ssl: static[bool] = true
+) =
+  run(
+    hostname,
+    port,
+    processStreamWrap(routes),
+    sslCertFile,
+    sslKeyFile,
+    maxConnections,
+    threads,
+    ssl
+  )

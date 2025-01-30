@@ -7,8 +7,8 @@ license = "MIT"
 srcDir = "src"
 skipDirs = @["tests", "examples"]
 
-requires "nim >= 2.0.8"
-requires "hyperx >= 0.1.42"
+requires "nim >= 2.0.14"
+requires "hyperx >= 0.1.44"
 requires "https://github.com/nitely/nim-protobuf-serialization#471301dfb583a802768979e287ea2c2e51f203ab"
 requires "zippy >= 0.10.14"
 
@@ -26,6 +26,15 @@ task exampleserveinsecure, "Example serve insecure":
 
 task exampleclientinsecure, "Example client insecure":
   exec "nim c -r examples/insecure_client.nim"
+
+task exampleservemultithread, "Example serve multi-thread":
+  exec "nim c -r examples/multi_thread_server.nim"
+
+task testfuncserve, "Test functional serve":
+  exec "nim c -r tests/functional/tmultithreadserver.nim"
+
+task testfuncclient, "Test functional client":
+  exec "nim c -r tests/functional/tmultithreadclient.nim"
 
 task testserve, "Test serve":
   exec "nim c -r tests/testserver.nim"
