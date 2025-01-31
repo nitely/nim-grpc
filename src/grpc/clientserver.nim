@@ -211,7 +211,7 @@ proc recvBuff(strm: GrpcStream) {.async.} =
     await strm.sendHeaders(strm.headersOut)
   if strm.headers[].len == 0:
     await strm.recvHeaders()
-  if not strm.stream.recvEnded and strm.buff.len == 0:
+  if not strm.stream.recvEnded and strm.buff[].len == 0:
     tryHyperx await strm.stream.recvBody(strm.buff)
 
 template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =
