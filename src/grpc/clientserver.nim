@@ -216,7 +216,7 @@ proc recvBuff(strm: GrpcStream) {.async.} =
 
 template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =
   while true:
-    await recvBuff()
+    await strm.recvBuff()
     if strm.recvEnded:
       break
     body
