@@ -206,12 +206,20 @@ proc recvEnd*(strm: GrpcStream) {.async.} =
   check strm.recvEnded
   check not recved
 
+proc recvBuff(strm: GrpcStream) {.async.} =
+  if not strm.headersSent and strm.typ == gtClient:
+    await strm.sendHeaders(strm.headersOut)
+  if strm.headers[].len == 0:
+    await strm.recvHeaders()
+  if not strm.stream.recvEnded and strm.buff.len == 0:
+    tryHyperx await strm.stream.recvBody(strm.buff)
+
 template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =
-  try:
-    while not strm.recvEnded:
-      body
-  except GrpcNoMessageException:
-    doAssert strm.recvEnded
+  while true:
+    await recvBuff()
+    if strm.recvEnded:
+      break
+    body
 
 proc failSilently*(fut: Future[void]) {.async.} =
   try:
