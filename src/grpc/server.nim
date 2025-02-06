@@ -46,7 +46,7 @@ proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
     strm.headersSent = true
     headers2 = strm.headersOut()
     headers2[].add headers[]
-  tryHyperx await strm.stream.sendHeaders(headers2[], finish = true)
+  catchHyperx await strm.stream.sendHeaders(headers2[], finish = true)
 
 proc sendTrailers(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Future[void] =
   strm.sendTrailers(strm.trailersOut(status, msg))

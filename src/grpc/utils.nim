@@ -45,7 +45,7 @@ template debugInfo*(s: untyped): untyped =
   else:
     discard
 
-template tryHyperx*(body: untyped): untyped =
+template catchHyperx*(body: untyped): untyped =
   try:
     body
   except HyperxError as err:
@@ -54,7 +54,7 @@ template tryHyperx*(body: untyped): untyped =
       of hyxLocalErr: newGrpcFailure(err.code.toGrpcStatusCode, parent = err)
       of hyxRemoteErr: newGrpcRemoteFailure(err.code.toGrpcStatusCode, parent = err)
 
-template tryCatch*(body: untyped): untyped =
+template catch*(body: untyped): untyped =
   try:
     body
   except CatchableError as err:
@@ -82,7 +82,7 @@ func newSeqRef*[T](s: seq[T] = @[]): ref seq[T] =
 proc toWireData*(msg: string, compress = false): string {.raises: [GrpcFailure].} =
   template ones(n: untyped): uint = (1.uint shl n) - 1
   let msg = if compress:
-    tryCatch compress(msg, BestSpeed, dfGzip)
+    catch compress(msg, BestSpeed, dfGzip)
   else:
     msg
   let L = msg.len.uint
@@ -100,10 +100,10 @@ proc fromWireData*(data: string): string {.raises: [GrpcFailure].} =
   result = newStringOfCap(data.len-5)
   result.add toOpenArray(data, 5, data.len-1)
   if data[0] == 1.char:
-    result = tryCatch uncompress(result)
+    result = catch uncompress(result)
 
 proc pbEncode*[T](s: T, compress = false): ref string {.raises: [GrpcFailure].} =
-  let ee = tryCatch Protobuf.encode(s)
+  let ee = catch Protobuf.encode(s)
   var ss = newString(ee.len)
   for i in 0 .. ee.len-1:
     ss[i] = ee[i].char
@@ -111,7 +111,7 @@ proc pbEncode*[T](s: T, compress = false): ref string {.raises: [GrpcFailure].} 
 
 proc pbDecode*[T](s: ref string, t: typedesc[T]): T {.raises: [GrpcFailure].} =
   let ss = s[].fromWireData
-  result = tryCatch Protobuf.decode(ss, t)
+  result = catch Protobuf.decode(ss, t)
 
 # XXX validate utf8; replace bad chars
 func percentEnc*(s: string): string {.raises: [].} =

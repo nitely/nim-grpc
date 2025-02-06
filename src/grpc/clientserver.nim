@@ -102,7 +102,7 @@ proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
   check not strm.canceled, newGrpcFailure grpcCancelled
   check not strm.headersSent
   strm.headersSent = true
-  tryHyperx await strm.stream.sendHeaders(headers[], finish = false)
+  catchHyperx await strm.stream.sendHeaders(headers[], finish = false)
 
 proc sendHeaders*(strm: GrpcStream): Future[void] =
   strm.sendHeaders(strm.headersOut)
@@ -114,7 +114,7 @@ proc sendMessage*(
     await strm.sendHeaders()
   check not strm.deadlineEx, newGrpcFailure grpcDeadlineEx
   check not strm.canceled, newGrpcFailure grpcCancelled
-  tryHyperx await strm.stream.sendBody(data, finish)
+  catchHyperx await strm.stream.sendBody(data, finish)
 
 proc sendMessage*[T](
   strm: GrpcStream, msg: T, finish = false, compress = false
@@ -130,10 +130,10 @@ proc sendEnd*(strm: GrpcStream): Future[void] =
 proc sendCancel*(strm: GrpcStream) {.async.} =
   # XXX maybe just raise cancel error here
   strm.canceled = true
-  tryHyperx await strm.stream.cancel(hyxCancel)
+  catchHyperx await strm.stream.cancel(hyxCancel)
 
 proc sendNoError*(strm: GrpcStream) {.async.} =
-  tryHyperx await strm.stream.cancel(hyxNoError)
+  catchHyperx await strm.stream.cancel(hyxNoError)
 
 proc isRecvEmpty*(strm: GrpcStream): bool =
   ## Return whether there is data left in the buffer.
@@ -146,7 +146,7 @@ proc recvEnded*(strm: GrpcStream): bool =
 proc recvHeaders*(strm: GrpcStream) {.async.} =
   doAssert strm.headers[].len == 0
   #check not strm.canceled, newGrpcFailure grpcCancelled
-  tryHyperx await strm.stream.recvHeaders(strm.headers)
+  catchHyperx await strm.stream.recvHeaders(strm.headers)
 
 func recordSize(data: string): int =
   if data.len == 0:
@@ -176,7 +176,7 @@ proc recvMessage*(
     await strm.recvHeaders()
   while not strm.stream.recvEnded and not strm.buff[].hasFullRecord:
     #check not strm.canceled, newGrpcFailure grpcCancelled
-    tryHyperx await strm.stream.recvBody(strm.buff)
+    catchHyperx await strm.stream.recvBody(strm.buff)
   check strm.buff[].hasFullRecord or strm.buff[].len == 0
   let L = strm.buff[].recordSize
   data[].add toOpenArray(strm.buff[], 0, L-1)
