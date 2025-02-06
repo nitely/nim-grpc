@@ -81,6 +81,7 @@ func newSeqRef*[T](s: seq[T] = @[]): ref seq[T] =
 
 proc toWireData*(msg: string, compress = false): string {.raises: [GrpcFailure].} =
   template ones(n: untyped): uint = (1.uint shl n) - 1
+  let compress = compress and msg.len > 860
   let msg = if compress:
     catch compress(msg, BestSpeed, dfGzip)
   else:
