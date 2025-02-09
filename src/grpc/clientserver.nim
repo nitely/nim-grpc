@@ -19,7 +19,7 @@ func len(buff: Buff): int {.inline.} =
   buff.s[].len-buff.pos
 
 func truncate(buff: var Buff) =
-  buff.s[].setSlice buff.pos .. strm.buff.len-1
+  buff.s[].setSlice buff.pos .. buff.len-1
   buff.pos = 0
 
 type Headers* = ref seq[(string, string)]
