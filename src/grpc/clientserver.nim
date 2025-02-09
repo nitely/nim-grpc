@@ -10,7 +10,7 @@ import ./utils
 
 type Buff = object
   s: ref string
-  pos: 0
+  pos: int
 
 template data(buff: Buff): untyped =
   toOpenArray(buff.pos, len(buff.s[])-1, buff.s[])
