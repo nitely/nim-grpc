@@ -8,6 +8,20 @@ import pkg/hyperx/errors
 import ./errors
 import ./utils
 
+type Buff = object
+  s: ref string
+  pos: int
+
+template data(buff: Buff): untyped =
+  toOpenArray(buff.s[], buff.pos, len(buff.s[])-1)
+
+func len(buff: Buff): int {.inline.} =
+  buff.s[].len-buff.pos
+
+func truncate(buff: var Buff) =
+  buff.s[].setSlice buff.pos .. buff.len-1
+  buff.pos = 0
+
 type Headers* = ref seq[(string, string)]
 type GrpcTyp* = enum
   gtServer, gtClient
@@ -26,7 +40,7 @@ type GrpcStream* = ref object
   canceled*: bool
   deadlineEx*: bool
   ended*: bool
-  buff: ref string
+  buff: Buff
 
 proc newGrpcStream(
   typ: GrpcTyp,
@@ -45,7 +59,7 @@ proc newGrpcStream(
     timeout: timeout,
     timeoutUnit: timeoutUnit,
     headers: newStringRef(),
-    buff: newStringRef()
+    buff: Buff(s: newStringRef(), pos: 0)
   )
 
 proc newGrpcStream*(stream: ClientStream): GrpcStream =
@@ -138,17 +152,17 @@ proc sendNoError*(strm: GrpcStream) {.async.} =
 proc isRecvEmpty*(strm: GrpcStream): bool =
   ## Return whether there is data left in the buffer.
   ## Even if true, recv may not have ended.
-  result = strm.buff[].len == 0
+  result = strm.buff.len == 0
 
 proc recvEnded*(strm: GrpcStream): bool =
-  result = strm.stream.recvEnded and strm.buff[].len == 0
+  result = strm.stream.recvEnded and strm.buff.len == 0
 
 proc recvHeaders*(strm: GrpcStream) {.async.} =
   doAssert strm.headers[].len == 0
   #check not strm.canceled, newGrpcFailure grpcCancelled
   catchHyperx await strm.stream.recvHeaders(strm.headers)
 
-func recordSize(data: string): int =
+func recordSize(data: openArray[char]): int =
   if data.len == 0:
     return 0
   doAssert data.len >= 5
@@ -160,7 +174,7 @@ func recordSize(data: string): int =
   # XXX check bit 31 is not set
   result = L.int+5
 
-func hasFullRecord(data: string): bool =
+func hasFullRecord(data: openArray[char]): bool =
   if data.len < 5:
     return false
   result = data.len >= data.recordSize
@@ -174,13 +188,15 @@ proc recvMessage*(
     await strm.sendHeaders(strm.headersOut)
   if strm.headers[].len == 0:
     await strm.recvHeaders()
-  while not strm.stream.recvEnded and not strm.buff[].hasFullRecord:
+  while not strm.stream.recvEnded and not strm.buff.data.hasFullRecord:
     #check not strm.canceled, newGrpcFailure grpcCancelled
-    catchHyperx await strm.stream.recvBody(strm.buff)
-  check strm.buff[].hasFullRecord or strm.buff[].len == 0
-  let L = strm.buff[].recordSize
-  data[].add toOpenArray(strm.buff[], 0, L-1)
-  strm.buff[].setSlice L .. strm.buff[].len-1
+    catchHyperx await strm.stream.recvBody(strm.buff.s)
+  check strm.buff.data.hasFullRecord or strm.buff.len == 0
+  let L = strm.buff.data.recordSize
+  data[].add toOpenArray(strm.buff.data, 0, L-1)
+  strm.buff.pos += L
+  if not strm.buff.data.hasFullRecord:
+    strm.buff.truncate()
   result = L > 0
 
 proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
