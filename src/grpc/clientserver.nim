@@ -13,7 +13,7 @@ type Buff = object
   pos: int
 
 template data(buff: Buff): untyped =
-  toOpenArray(buff.pos, len(buff.s[])-1, buff.s[])
+  toOpenArray(buff.s[], buff.pos, len(buff.s[])-1)
 
 func len(buff: Buff): int {.inline.} =
   buff.s[].len-buff.pos
