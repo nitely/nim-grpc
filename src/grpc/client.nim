@@ -1,5 +1,7 @@
 import std/asyncdispatch
 import std/strbasics
+import std/times
+import std/monotimes
 
 import pkg/hyperx/client
 import pkg/hyperx/errors
@@ -42,11 +44,13 @@ func timeoutMillis(strm: GrpcStream): int {.raises: [].} =
 proc deadlineTask(strm: GrpcStream) {.async.} =
   ## Meant to be asyncCheck'd
   doAssert strm.timeout > 0
-  var timeLeft = strm.timeoutMillis()
-  let ms = min(timeLeft, 1000)
+  let timeout = strm.timeoutMillis
+  let ms = min(timeout, 1000)
+  let deadline = getMonoTime()+initDuration(milliseconds=timeout)
+  var timeLeft = inMilliseconds(deadline-getMonoTime())
   while timeLeft > 0 and not strm.ended:
     await sleepAsync(min(timeLeft, ms))
-    timeLeft -= ms
+    timeLeft = inMilliseconds(deadline-getMonoTime())
   strm.deadlineEx = not strm.ended
   if strm.deadlineEx:
     await failSilently strm.sendCancel()
