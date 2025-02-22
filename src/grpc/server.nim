@@ -61,10 +61,10 @@ proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
   doAssert timeout > 0
   let ms = min(timeout, 1000)
   let deadline = getMonoTime()+initDuration(milliseconds=timeout)
-  var timeLeft = inMilliseconds(deadline-getMonoTime())
+  var timeLeft = inMilliseconds(deadline-getMonoTime()).int
   while timeLeft > 0 and not strm.ended:
     await sleepAsync(min(timeLeft, ms))
-    timeLeft = inMilliseconds(deadline-getMonoTime())
+    timeLeft = inMilliseconds(deadline-getMonoTime()).int
   strm.deadlineEx = not strm.ended
   if strm.deadlineEx:
     if not strm.trailersSent:
