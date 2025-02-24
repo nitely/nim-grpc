@@ -16,6 +16,7 @@ export
   ClientContext,
   newClient,
   with,
+  GrpcFailure,
   GrpcResponseError,
   `==`,
   recvMessage,
@@ -46,8 +47,8 @@ proc deadlineTask(strm: GrpcStream) {.async.} =
   doAssert strm.timeout > 0
   let timeout = strm.timeoutMillis
   let ms = min(timeout, 1000)
-  let deadline = getMonoTime()+initDuration(milliseconds=timeout)
-  var timeLeft = timeout.int
+  let deadline = getMonoTime()+initDuration(milliseconds = timeout)
+  var timeLeft = timeout
   while timeLeft > 0 and not strm.ended:
     await sleepAsync(min(timeLeft, ms))
     timeLeft = min(timeLeft-ms, inMilliseconds(deadline-getMonoTime()).int)

@@ -60,7 +60,7 @@ proc sendCancel*(strm: GrpcStream, status: GrpcStatusCode) {.async.} =
 proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
   doAssert timeout > 0
   let ms = min(timeout, 1000)
-  let deadline = getMonoTime()+initDuration(milliseconds=timeout)
+  let deadline = getMonoTime()+initDuration(milliseconds = timeout)
   var timeLeft = timeout
   while timeLeft > 0 and not strm.ended:
     await sleepAsync(min(timeLeft, ms))

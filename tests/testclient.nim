@@ -3,6 +3,7 @@
 import std/asyncdispatch
 
 import ../src/grpc
+import ../src/grpc/statuscodes
 import ./pbtypes
 
 template testAsync(name: string, body: untyped): untyped =
@@ -119,3 +120,33 @@ testAsync "big_payload_stream":
         doAssert reply.message == "Hello, " & payload & $i
         inc checked
   doAssert checked == 3
+
+testAsync "deadline":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(testHelloPath, timeout = 1)
+    try:
+      with stream:
+        #await stream.sendMessage(HelloRequest(name: "you"))
+        discard await stream.recvMessage(HelloReply)
+        doAssert false
+    except GrpcFailure as err:
+      doAssert err.code == grpcDeadlineEx, $err.code
+      inc checked
+  doAssert checked == 1
+
+testAsync "deadline_not_reached":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(testHelloPath, timeout = 1, timeoutUnit = grpcHour)
+    with stream:
+      await stream.sendMessage(HelloRequest(name: "you"))
+      let reply = await stream.recvMessage(HelloReply)
+      doAssert reply.message == "Hello, you"
+      inc checked
+  doAssert checked == 1
+  # wait for deadline to expire
+  while hasPendingOperations():
+    await sleepAsync(1)
