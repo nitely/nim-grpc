@@ -1,5 +1,7 @@
 import std/asyncdispatch
 import std/tables
+import std/times
+import std/monotimes
 
 import pkg/hyperx/server
 
@@ -57,11 +59,12 @@ proc sendCancel*(strm: GrpcStream, status: GrpcStatusCode) {.async.} =
 
 proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
   doAssert timeout > 0
+  let ms = min(timeout, 1000)
+  let deadline = getMonoTime()+initDuration(milliseconds = timeout)
   var timeLeft = timeout
-  let ms = min(timeLeft, 1000)
   while timeLeft > 0 and not strm.ended:
     await sleepAsync(min(timeLeft, ms))
-    timeLeft -= ms
+    timeLeft = min(timeLeft-ms, inMilliseconds(deadline-getMonoTime()).int)
   strm.deadlineEx = not strm.ended
   if strm.deadlineEx:
     if not strm.trailersSent:
