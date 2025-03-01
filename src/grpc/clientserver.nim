@@ -235,3 +235,10 @@ proc failSilently*(fut: Future[void]) {.async.} =
       await fut
   except HyperxError, GrpcFailure:
     debugErr getCurrentException()
+
+proc testBuffAll*(strm: GrpcStream) {.async.} =
+  ## for testing purposes; buff all recv data
+  if strm.headers[].len == 0:
+    await strm.recvHeaders()
+  while not strm.stream.recvEnded:
+    catchHyperx await strm.stream.recvBody(strm.buff.s)
