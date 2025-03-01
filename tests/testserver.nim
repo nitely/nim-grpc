@@ -17,6 +17,13 @@ proc testHello(strm: GrpcStream) {.async.} =
     HelloReply(message: "Hello, " & request.name)
   )
 
+proc testHelloUni(strm: GrpcStream) {.async.} =
+  let request = await strm.recvMessage(HelloRequest)
+  for i in 0 .. 9:
+    await strm.sendMessage(
+      HelloReply(message: "Hello, " & request.name & " " & $i)
+    )
+
 proc testHelloBidi(strm: GrpcStream) {.async.} =
   whileRecvMessages strm:
     let request = await strm.recvMessage(HelloRequest)
@@ -29,6 +36,7 @@ proc main() {.async.} =
   let server = newServer(localHost, localPort, certFile, keyFile)
   await server.serve(@[
     (GreeterTestHelloPath, testHello.GrpcCallback),
+    (GreeterTestHelloUniPath, testHelloUni.GrpcCallback),
     (GreeterTestHelloBidiPath, testHelloBidi.GrpcCallback),
   ])
 

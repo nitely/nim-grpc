@@ -2,6 +2,7 @@ syntax = "proto3";
 
 service Greeter {
   rpc TestHello (HelloRequest) returns (HelloReply) {}
+  rpc TestHelloUni (HelloRequest) returns (stream HelloReply) {}
   rpc TestHelloBidi (stream HelloRequest) returns (stream HelloReply) {}
 }
 

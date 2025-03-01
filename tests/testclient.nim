@@ -5,6 +5,7 @@ import std/asyncdispatch
 import ../src/grpc
 import ../src/grpc/statuscodes
 import ./pbtypes
+from ../src/grpc/clientserver import testBuffAll
 
 template testAsync(name: string, body: untyped): untyped =
   (proc () = 
@@ -21,6 +22,7 @@ template testAsync(name: string, body: untyped): untyped =
 const localHost = "127.0.0.1"
 const localPort = Port 8114
 const testHelloPath = GreeterTestHelloPath
+const testHelloUniPath = GreeterTestHelloUniPath
 const testHelloBidiPath = GreeterTestHelloBidiPath
 
 testAsync "simple_request":
@@ -150,3 +152,36 @@ testAsync "deadline_not_reached":
   # wait for deadline to expire
   while hasPendingOperations():
     await sleepAsync(1)
+
+testAsync "stream_response":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(testHelloUniPath)
+    with stream:
+      await stream.sendMessage(HelloRequest(name: "you"))
+      var i = 0
+      whileRecvMessages stream:
+        let reply = await stream.recvMessage(HelloReply)
+        doAssert reply.message == "Hello, you " & $i
+        inc i
+      doAssert i == 10
+      inc checked
+  doAssert checked == 1
+
+testAsync "stream_response_backlog":
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(testHelloUniPath)
+    with stream:
+      await stream.sendMessage(HelloRequest(name: "you"))
+      await stream.testBuffAll()
+      var i = 0
+      whileRecvMessages stream:
+        let reply = await stream.recvMessage(HelloReply)
+        doAssert reply.message == "Hello, you " & $i
+        inc i
+      doAssert i == 10
+      inc checked
+  doAssert checked == 1
