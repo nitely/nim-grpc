@@ -88,7 +88,7 @@ func `$`(typ: GrpcTimeoutUnit): char =
   of grpcNsec: 'n'
 
 func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
-  var headers = newSeq[(string, string)]()
+  var headers = newSeqOfCap[(string, string)](16)
   case strm.typ
   of gtClient:
     headers.add (":method", "POST")
