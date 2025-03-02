@@ -59,7 +59,7 @@ proc sendCancel*(strm: GrpcStream, status: GrpcStatusCode) {.async.} =
 
 proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
   doAssert timeout > 0
-  let ms = min(timeout, 1000)
+  let ms = min(timeout, 100)
   let deadline = getMonoTime()+initDuration(milliseconds = timeout)
   var timeLeft = timeout
   while timeLeft > 0 and not strm.ended:
@@ -97,12 +97,13 @@ proc processStream(
       await failSilently strm.sendTrailers(grpcInternal)
     raise err
   finally:
-    await failSilently strm.sendNoError()
+    #await failSilently strm.sendNoError()
     strm.ended = true
     if strm.deadlineEx:
       await failSilently deadlineFut
     elif deadlineFut != nil:
       asyncCheck deadlineFut
+      deadlineFut = nil
 
 proc processStream(
   strm: ClientStream, routes: GrpcRoutes | GrpcSafeRoutes2
