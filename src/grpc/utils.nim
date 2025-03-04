@@ -1,4 +1,3 @@
-import std/strbasics
 import std/uri
 
 import pkg/hyperx/errors

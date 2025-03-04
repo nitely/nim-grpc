@@ -4,6 +4,7 @@ examples/tls_server
 examples/insecure_client
 examples/insecure_server
 examples/multi_thread_server
+examples/bench
 tests/interop/testserver
 tests/interop/testclient
 tests/testserver

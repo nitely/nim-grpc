@@ -18,8 +18,4 @@ proc main {.async.} =
     (GreeterSayHelloPath, sayHello.GrpcCallback)
   ])
 
-#waitFor main()
-let mfut = main()
-while true:
-  poll(0)
-mfut.read()
+waitFor main()
