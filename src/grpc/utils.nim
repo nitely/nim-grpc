@@ -1,4 +1,3 @@
-import std/strbasics
 import std/uri
 
 import pkg/hyperx/errors
@@ -71,35 +70,36 @@ template check*(cond, err: untyped): untyped =
     if not cond:
       raise err
 
-func newStringRef*(s = ""): ref string =
+func newStringRef*(s: sink string = ""): ref string =
   new result
   result[] = s
 
-func newSeqRef*[T](s: seq[T] = @[]): ref seq[T] =
+func newSeqRef*[T](s: sink seq[T] = @[]): ref seq[T] =
   new result
   result[] = s
 
 proc toWireData*(msg: string, compress = false): string {.raises: [GrpcFailure].} =
   template ones(n: untyped): uint = (1.uint shl n) - 1
   let compress = compress and msg.len > 860
-  let msg = if compress:
-    catch compress(msg, BestSpeed, dfGzip)
+  if compress:
+    let msgc = catch compress(msg, BestSpeed, dfGzip)
+    result = newString(msgc.len+5)
+    for i in 0 .. msgc.len-1:
+      result[i+5] = msgc[i]
   else:
-    msg
-  let L = msg.len.uint
-  result = newStringOfCap(msg.len+5)
-  result.setLen 5
+    result = newString(msg.len+5)
+    for i in 0 .. msg.len-1:
+      result[i+5] = msg[i]
+  let L = (result.len-5).uint
   result[0] = compress.char
   result[1] = ((L shr 24) and 8.ones).char
   result[2] = ((L shr 16) and 8.ones).char
   result[3] = ((L shr 8) and 8.ones).char
   result[4] = (L and 8.ones).char
-  result.add msg
 
 proc fromWireData*(data: string): string {.raises: [GrpcFailure].} =
   doAssert data.len >= 5
-  result = newStringOfCap(data.len-5)
-  result.add toOpenArray(data, 5, data.len-1)
+  result = data[5 .. data.len-1]
   if data[0] == 1.char:
     result = catch uncompress(result)
 

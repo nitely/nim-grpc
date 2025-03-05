@@ -46,7 +46,7 @@ proc deadlineTask(strm: GrpcStream) {.async.} =
   ## Meant to be asyncCheck'd
   doAssert strm.timeout > 0
   let timeout = strm.timeoutMillis
-  let ms = min(timeout, 1000)
+  let ms = min(timeout, 500)
   let deadline = getMonoTime()+initDuration(milliseconds = timeout)
   var timeLeft = timeout
   while timeLeft > 0 and not strm.ended:
@@ -79,6 +79,7 @@ template with*(strm: GrpcStream, body: untyped): untyped =
           await failSilently deadlineFut
         elif deadlineFut != nil:
           asyncCheck deadlineFut
+        deadlineFut = nil
         if not strm.canceled and not strm.recvEnded:
           await failSilently strm.sendCancel()
   except GrpcRemoteFailure:
