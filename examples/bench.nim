@@ -16,7 +16,7 @@ proc sayHello(client: ClientContext) {.async.} =
 proc doWork {.async.} =
   let client = newClient("127.0.0.1", Port 8115, ssl = false)
   with client:
-    let lt = newLimiter(50)
+    let lt = newLimiter(100)
     for _ in 0 .. 10_000:
       await lt.spawn client.sayHello()
     await lt.join()
@@ -24,7 +24,7 @@ proc doWork {.async.} =
 
 proc main {.async.} =
   let lt = newLimiter(100_000)
-  for _ in 0 ..< 1:
+  for _ in 0 ..< 10:
     await lt.spawn doWork()
   await lt.join()
   echo "ok"
