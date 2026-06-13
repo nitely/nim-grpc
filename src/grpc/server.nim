@@ -22,7 +22,8 @@ export
   headersOut,
   sendHeaders,
   protobuf,
-  trace
+  trace,
+  tables
 
 type
   GrpcCallback* = proc(strm: GrpcStream): Future[void] {.closure, gcsafe.}
