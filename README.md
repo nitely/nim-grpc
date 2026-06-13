@@ -27,10 +27,6 @@ Read the examples and the interop tests.
 The `-d:grpcDebug` define will print debugging
 messages and error traces
 
-## Limitations
-
-- The protobuf library [does not support enums](https://github.com/status-im/nim-protobuf-serialization/issues/39). You may change enums to int32 and they will work fine for interop.
-
 ## LICENSE
 
 MIT
