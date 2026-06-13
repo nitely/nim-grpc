@@ -55,7 +55,7 @@ func toResponseHeaders*(s: string): ResponseHeaders =
     if toOpenArray(s, nn.a, nn.b) == "grpc-status":
       result.status = parseStatusCode toOpenArray(s, vv.a, vv.b)
     elif toOpenArray(s, nn.a, nn.b) == "grpc-message":
-      result.statusMsg = percentDec s[vv]
+      result.statusMsg = grpcPercentDec s[vv]
 
 func checkResponseError*(s: string) {.raises: [GrpcResponseError].} =
   let r = toResponseHeaders s
@@ -65,13 +65,13 @@ func checkResponseError*(s: string) {.raises: [GrpcResponseError].} =
 func toMillis(tt: int, unit: char): int {.raises: [GrpcFailure].} =
   case unit
   of 'H':
-    check tt < int.high div 3600000, newGrpcFailure()
+    grpcCheck tt < int.high div 3600000, newGrpcFailure()
     tt * 3600000
   of 'M':
-    check tt < int.high div 60000, newGrpcFailure()
+    grpcCheck tt < int.high div 60000, newGrpcFailure()
     tt * 60000
   of 'S':
-    check tt < int.high div 1000, newGrpcFailure()
+    grpcCheck tt < int.high div 1000, newGrpcFailure()
     tt * 1000
   of 'm': tt
   of 'u': max(1, tt div 1000)
@@ -80,8 +80,8 @@ func toMillis(tt: int, unit: char): int {.raises: [GrpcFailure].} =
     doAssert false; 0
 
 func parseTimeout(raw: openArray[char]): int {.raises: [GrpcFailure].} =
-  check raw.len in 2 .. 9, newGrpcFailure()
-  check raw[^1] in {'H', 'M', 'S', 'm', 'u', 'n'}, newGrpcFailure()
+  grpcCheck raw.len in 2 .. 9, newGrpcFailure()
+  grpcCheck raw[^1] in {'H', 'M', 'S', 'm', 'u', 'n'}, newGrpcFailure()
   var timeout = 0
   for i in 0 .. raw.len-2:
     if raw[i].ord in '0'.ord .. '9'.ord:

@@ -22,7 +22,8 @@ export
   headersOut,
   sendHeaders,
   protobuf,
-  trace
+  trace,
+  tables
 
 type
   GrpcCallback* = proc(strm: GrpcStream): Future[void] {.closure, gcsafe.}
@@ -33,22 +34,22 @@ type
   GrpcSafeRoutes2 = ptr Table[string, GrpcSafeCallback]
 
 func trailersOut*(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Headers =
-  result = newSeqRef[(string, string)]()
+  result = grpcNewSeqRef[(string, string)]()
   result[].add ("grpc-status", $status)
   if msg.len > 0:
-    result[].add ("grpc-message", percentEnc msg)
+    result[].add ("grpc-message", grpcPercentEnc msg)
 
 proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
   doAssert strm.typ == gtServer
-  check not strm.stream.sendEnded
-  check not strm.trailersSent
+  grpcCheck not strm.stream.sendEnded
+  grpcCheck not strm.trailersSent
   strm.trailersSent = true
   var headers2 = headers
   if not strm.headersSent:
     strm.headersSent = true
     headers2 = strm.headersOut()
     headers2[].add headers[]
-  catchHyperx await strm.stream.sendHeaders(headers2[], finish = true)
+  grpcCatchHyperx await strm.stream.sendHeaders(headers2[], finish = true)
 
 proc sendTrailers(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Future[void] =
   strm.sendTrailers(strm.trailersOut(status, msg))
@@ -79,11 +80,11 @@ proc processStream(
     await strm.recvHeaders()
     let reqHeaders = toRequestHeaders strm.headers[]
     strm.compress = reqHeaders.compress
-    check reqHeaders.path in routes[], newGrpcFailure grpcNotFound
+    grpcCheck reqHeaders.path in routes[], newGrpcFailure grpcNotFound
     if reqHeaders.timeout > 0:
       deadlineFut = deadlineTask(strm, reqHeaders.timeout)
     await routes[][reqHeaders.path](strm)
-    check strm.isRecvEmpty() or strm.canceled, newGrpcFailure grpcInternal
+    grpcCheck strm.isRecvEmpty() or strm.canceled, newGrpcFailure grpcInternal
     if not strm.trailersSent:
       await strm.sendTrailers(grpcOk)
   except GrpcRemoteFailure as err:
@@ -111,7 +112,7 @@ proc processStream(
   try:
     await processStream(newGrpcStream(strm), routes)
   except CatchableError:
-    debugErr getCurrentException()
+    grpcDebugErr getCurrentException()
 
 proc processStreamWrap(routes: GrpcRoutes): StreamCallback =
   proc(strm: ClientStream): Future[void] {.closure, gcsafe.} =

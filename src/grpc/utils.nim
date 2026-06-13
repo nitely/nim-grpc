@@ -7,6 +7,8 @@ import ./protobuf
 import ./errors
 import ./statuscodes
 
+export protobuf
+
 func stackTrace2(err: ref Exception): string {.raises: [].} =
   doAssert err != nil
   result = ""
@@ -30,13 +32,13 @@ func fulltrace(err: ref Exception): string {.raises: [].} =
 func trace*(err: ref GrpcFailure): string {.raises: [].} =
   fulltrace err
 
-func debugErr*(err: ref Exception) =
+func grpcDebugErr*(err: ref Exception) =
   when defined(grpcDebug) or defined(grpcDebugErr):
     debugEcho fulltrace(err)
   else:
     discard
 
-template debugInfo*(s: untyped): untyped =
+template grpcDebugInfo*(s: untyped): untyped =
   when defined(grpcDebug):
     # hide "s" expresion side effcets
     {.cast(noSideEffect).}:
@@ -44,45 +46,45 @@ template debugInfo*(s: untyped): untyped =
   else:
     discard
 
-template catchHyperx*(body: untyped): untyped =
+template grpcCatchHyperx*(body: untyped): untyped =
   try:
     body
   except HyperxError as err:
-    debugErr err
+    grpcDebugErr err
     raise case err.typ
       of hyxLocalErr: newGrpcFailure(err.code.toGrpcStatusCode, parent = err)
       of hyxRemoteErr: newGrpcRemoteFailure(err.code.toGrpcStatusCode, parent = err)
 
-template catch*(body: untyped): untyped =
+template grpcCatch*(body: untyped): untyped =
   try:
     body
   except CatchableError as err:
-    debugErr err
+    grpcDebugErr err
     raise newGrpcFailure(parent = err)
 
-template check*(cond: untyped): untyped =
+template grpcCheck*(cond: untyped): untyped =
   {.line: instantiationInfo(fullPaths = true).}:
     if not cond:
       raise newGrpcFailure()
 
-template check*(cond, err: untyped): untyped =
+template grpcCheck*(cond, err: untyped): untyped =
   {.line: instantiationInfo(fullPaths = true).}:
     if not cond:
       raise err
 
-func newStringRef*(s: sink string = ""): ref string =
+func grpcNewStringRef*(s: sink string = ""): ref string =
   new result
   result[] = s
 
-func newSeqRef*[T](s: sink seq[T] = @[]): ref seq[T] =
+func grpcNewSeqRef*[T](s: sink seq[T] = @[]): ref seq[T] =
   new result
   result[] = s
 
-proc toWireData*(msg: string, compress = false): string {.raises: [GrpcFailure].} =
+proc grpcToWireData*(msg: string, compress = false): string {.raises: [GrpcFailure].} =
   template ones(n: untyped): uint = (1.uint shl n) - 1
   let compress = compress and msg.len > 860
   if compress:
-    let msgc = catch compress(msg, BestSpeed, dfGzip)
+    let msgc = grpcCatch zippy.compress(msg, BestSpeed, dfGzip)
     result = newString(msgc.len+5)
     for i in 0 .. msgc.len-1:
       result[i+5] = msgc[i]
@@ -97,28 +99,28 @@ proc toWireData*(msg: string, compress = false): string {.raises: [GrpcFailure].
   result[3] = ((L shr 8) and 8.ones).char
   result[4] = (L and 8.ones).char
 
-proc fromWireData*(data: string): string {.raises: [GrpcFailure].} =
+proc grpcFromWireData*(data: string): string {.raises: [GrpcFailure].} =
   doAssert data.len >= 5
   result = data[5 .. data.len-1]
   if data[0] == 1.char:
-    result = catch uncompress(result)
+    result = grpcCatch uncompress(result)
 
-proc pbEncode*[T](s: T, compress = false): ref string {.raises: [GrpcFailure].} =
-  let ee = catch Protobuf.encode(s)
+proc grpcPbEncode*[T](s: T, compress = false): ref string {.raises: [GrpcFailure].} =
+  let ee = grpcCatch Protobuf.encode(s)
   var ss = newString(ee.len)
   for i in 0 .. ee.len-1:
     ss[i] = ee[i].char
-  result = newStringRef ss.toWireData(compress)
+  result = grpcNewStringRef grpcToWireData(ss, compress)
 
-proc pbDecode*[T](s: ref string, t: typedesc[T]): T {.raises: [GrpcFailure].} =
-  let ss = s[].fromWireData
-  result = catch Protobuf.decode(ss, t)
+proc grpcPbDecode*[T](s: ref string, t: typedesc[T]): T {.raises: [GrpcFailure].} =
+  let ss = grpcFromWireData(s[])
+  result = grpcCatch Protobuf.decode(ss, t)
 
 # XXX validate utf8; replace bad chars
-func percentEnc*(s: string): string {.raises: [].} =
+func grpcPercentEnc*(s: string): string {.raises: [].} =
   ## rfc3986 percent encoder
   encodeUrl(s, usePlus = false)
 
-func percentDec*(s: string): string {.raises: [].} =
+func grpcPercentDec*(s: string): string {.raises: [].} =
   ## rfc3986 percent decoder
   decodeUrl(s, decodePlus = true)
