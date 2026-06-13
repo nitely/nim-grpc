@@ -9,8 +9,7 @@ skipDirs = @["tests", "examples"]
 
 requires "nim >= 2.0.14"
 requires "hyperx >= 0.1.50"
-#requires "protobuf_serialization >= 0.5.1"
-requires "https://github.com/status-im/nim-protobuf-serialization#78a5930c2357edfe460dd81cf3fea0a130f7e6a9"
+requires "protobuf_serialization >= 0.5.2"
 requires "zippy >= 0.10.14"
 
 #task test, "Test":
