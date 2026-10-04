@@ -78,7 +78,7 @@ proc processStream(
   var deadlineFut: Future[void] = nil
   try:
     await strm.recvHeaders()
-    let reqHeaders = toRequestHeaders strm.headers[]
+    let reqHeaders = toGrpcRequestHeaders strm.headers[]
     strm.compress = reqHeaders.compress
     grpcCheck reqHeaders.path in routes[], newGrpcFailure grpcNotFound
     if reqHeaders.timeout > 0:
