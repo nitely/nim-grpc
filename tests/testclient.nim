@@ -232,3 +232,24 @@ testAsync "remote_failure_not_cancelled":
       await lt.spawn client.call()
     await lt.join()
   doAssert codes == {grpcInternal}, $codes
+
+testAsync "send_end_without_finish":
+  # finish is never set, so the with block must end the stream
+  # (sendEnd); the bidi handler only returns after that. The
+  # deadline makes a missing sendEnd fail instead of hang
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(
+      testHelloBidiPath, timeout = 5, timeoutUnit = grpcSecond
+    )
+    with stream:
+      for i in 0 .. 2:
+        await stream.sendMessage(HelloRequest(name: "you" & $i))
+        let reply = await stream.recvMessage(HelloReply)
+        doAssert reply.message == "Hello, you" & $i
+        inc checked
+  doAssert checked == 3
+  # wait for deadline to expire
+  while hasPendingOperations():
+    await sleepAsync(1)
