@@ -127,6 +127,8 @@ proc sendHeaders*(strm: GrpcStream): Future[void] =
 proc sendMessage*(
   strm: GrpcStream, data: ref seq[byte], finish = false
 ) {.async.} =
+  doAssert not (finish and strm.typ == gtServer),
+    "the server cannot set finish; the trailers end the stream"
   if not strm.headersSent:
     await strm.sendHeaders()
   grpcCheck not strm.deadlineEx, newGrpcFailure grpcDeadlineEx

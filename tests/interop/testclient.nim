@@ -42,7 +42,7 @@ testAsync "empty_unary":
       TestServiceEmptyCallPath
     )
     with stream:
-      await stream.sendMessage(Empty())
+      await stream.sendMessage(Empty(), finish = true)
       discard await stream.recvMessage(Empty)
       checked = true
   doAssert checked
@@ -58,7 +58,7 @@ testAsync "large_unary":
       await stream.sendMessage(SimpleRequest(
         responseSize: 314159,
         payload: Payload(body: newSeq[byte](271828))
-      ))
+      ), finish = true)
       let reply = await stream.recvMessage(SimpleResponse)
       doAssert reply.payload.body.len == 314159
       checked = true
@@ -78,7 +78,8 @@ when testCompression:
               responseSize: 314159,
               payload: Payload(body: newSeq[byte](271828))
             ),
-            compress = false
+            compress = false,
+            finish = true
           )
           # XXX should raise GrpcResponseError here instead of w/e this raises
           discard await stream.recvMessage(SimpleResponse)
@@ -95,7 +96,8 @@ when testCompression:
               responseSize: 314159,
               payload: Payload(body: newSeq[byte](271828))
             ),
-            compress = false
+            compress = false,
+            finish = true
           )
           let reply = await stream.recvMessage(SimpleResponse)
           doAssert reply.payload.body.len == 314159
@@ -109,7 +111,8 @@ when testCompression:
               responseSize: 314159,
               payload: Payload(body: newSeq[byte](271828))
             ),
-            compress = true
+            compress = true,
+            finish = true
           )
           let reply = await stream.recvMessage(SimpleResponse)
           doAssert reply.payload.body.len == 314159
@@ -128,7 +131,7 @@ when testCompression:
             responseCompressed: boolTrue,
             responseSize: 314159,
             payload: Payload(body: newSeq[byte](271828))
-          ))
+          ), finish = true)
           let (compressed, reply) = await stream.recvMessage2(SimpleResponse)
           doAssert compressed
           doAssert reply.payload.body.len == 314159
@@ -140,7 +143,7 @@ when testCompression:
             responseCompressed: boolFalse,
             responseSize: 314159,
             payload: Payload(body: newSeq[byte](271828))
-          ))
+          ), finish = true)
           let (compressed, reply) = await stream.recvMessage2(SimpleResponse)
           doAssert not compressed
           doAssert reply.payload.body.len == 314159
@@ -226,7 +229,8 @@ testAsync "server_streaming":
             ResponseParameters(size: 2653),
             ResponseParameters(size: 58979),
           ]
-        )
+        ),
+        finish = true
       )
       var sizes = newSeq[int]()
       whileRecvMessages stream:
@@ -249,7 +253,8 @@ when testCompression:
               ResponseParameters(size: 31415, compressed: boolTrue),
               ResponseParameters(size: 92653, compressed: boolFalse),
             ]
-          )
+          ),
+          finish = true
         )
         var sizes = newSeq[int]()
         var compr = newSeq[bool]()
@@ -323,7 +328,7 @@ testAsync "custom_metadata":
         await stream.sendMessage(SimpleRequest(
           responseSize: 314159,
           payload: Payload(body: newSeq[byte](271828))
-        ))
+        ), finish = true)
         let reply = await stream.recvMessage(SimpleResponse)
         doAssert reply.payload.body.len == 314159
         doAssert xInitialKey & ": " & xInitialValue in stream.headers[]
@@ -364,7 +369,7 @@ testAsync "status_code_and_message":
       with stream:
         await stream.sendMessage(SimpleRequest(
           responseStatus: EchoStatus(code: 2, message: "test status message")
-        ))
+        ), finish = true)
         discard await stream.recvMessage(SimpleResponse)
         doAssert false
     except GrpcResponseError as err:
@@ -401,7 +406,7 @@ testAsync "special_status_message":
           responseStatus: EchoStatus(
             code: 2, message: expectedMessage
           )
-        ))
+        ), finish = true)
         discard await stream.recvMessage(SimpleResponse)
         doAssert false
     except GrpcResponseError as err:
@@ -419,7 +424,7 @@ testAsync "unimplemented_method":
         TestServiceUnimplementedCallPath
       )
       with stream:
-        await stream.sendMessage(Empty())
+        await stream.sendMessage(Empty(), finish = true)
         discard await stream.recvMessage(Empty)
         doAssert false
     except GrpcResponseError as err:
@@ -436,7 +441,7 @@ testAsync "unimplemented_service":
         UnimplementedServiceUnimplementedCallPath
       )
       with stream:
-        await stream.sendMessage(Empty())
+        await stream.sendMessage(Empty(), finish = true)
         discard await stream.recvMessage(Empty)
         doAssert false
     except GrpcResponseError as err:
@@ -470,7 +475,7 @@ testAsync "cancel_after_first_response":
             ResponseParameters(size: 31415)
           ],
           payload: Payload(body: newSeq[byte](27182))
-        ))
+        )) #, finish = true
         let reply = await stream.recvMessage(StreamingOutputCallResponse)
         doAssert reply.payload.body.len == 31415
         await stream.sendCancel()
@@ -493,7 +498,7 @@ testAsync "timeout_on_sleeping_server":
       with stream:
         await stream.sendMessage(StreamingOutputCallRequest(
           payload: Payload(body: newSeq[byte](27182))
-        ))
+        ))  #, finish = true
         whileRecvMessages stream:
           discard await stream.recvMessage(StreamingOutputCallResponse)
     except GrpcFailure as err:

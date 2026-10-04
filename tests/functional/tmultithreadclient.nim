@@ -14,7 +14,7 @@ proc sayHello(client: ClientContext) {.async.} =
   let sid = $id
   let stream = client.newGrpcStream(GreeterSayHelloPath)
   with stream:
-    await stream.sendMessage(HelloRequest(name: "you" & sid))
+    await stream.sendMessage(HelloRequest(name: "you" & sid), finish = true)
     let reply = await stream.recvMessage(HelloReply)
     doAssert reply.message == "Hello, you" & sid
     checked += 1
