@@ -16,7 +16,6 @@ export
   newServer,
   recvMessage,
   sendMessage,
-  sendEnd,
   whileRecvMessages,
   GrpcStream,
   headersOut,
@@ -40,7 +39,6 @@ func trailersOut*(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Headers =
     result[].add ("grpc-message", grpcPercentEnc msg)
 
 proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
-  doAssert strm.typ == gtServer
   grpcCheck not strm.stream.sendEnded
   grpcCheck not strm.trailersSent
   strm.trailersSent = true

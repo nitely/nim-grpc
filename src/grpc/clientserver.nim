@@ -26,12 +26,9 @@ func truncate(buff: var Buff) =
   buff.pos = 0
 
 type Headers* = ref seq[(string, string)]
-type GrpcTyp* = enum
-  gtServer, gtClient
 type GrpcTimeoutUnit* = enum
   grpcHour, grpcMinute, grpcSecond, grpcMsec, grpcUsec, grpcNsec
-type GrpcStream* = ref object
-  typ*: GrpcTyp
+type GrpcStreamBase* = ref object of RootObj
   stream*: ClientStream
   path*: ref string
   timeout*: int
@@ -44,30 +41,19 @@ type GrpcStream* = ref object
   deadlineEx*: bool
   ended*: bool
   buff: Buff
-
-proc newGrpcStream(
-  typ: GrpcTyp,
-  stream: ClientStream,
-  path = "",
-  timeout = 0,
-  timeoutUnit = grpcMsec,
-  compress = false
-): GrpcStream =
-  doAssert timeout < 100_000_000
-  GrpcStream(
-    typ: typ,
-    stream: stream,
-    path: grpcNewStringRef(path),
-    compress: compress,
-    timeout: timeout,
-    timeoutUnit: timeoutUnit,
-    headers: grpcNewStringRef(),
-    buff: Buff(s: grpcNewSeqRef[byte](), pos: 0)
-  )
+type GrpcStream* = ref object of GrpcStreamBase
+  ## Server stream
+type GrpcClientStream* = ref object of GrpcStreamBase
+  ## Client stream
 
 proc newGrpcStream*(stream: ClientStream): GrpcStream =
   ## Server stream
-  newGrpcStream(gtServer, stream)
+  GrpcStream(
+    stream: stream,
+    path: grpcNewStringRef(),
+    headers: grpcNewStringRef(),
+    buff: Buff(s: grpcNewSeqRef[byte](), pos: 0)
+  )
 
 proc newGrpcStream*(
   client: ClientContext,
@@ -75,10 +61,17 @@ proc newGrpcStream*(
   timeout = 0,
   timeoutUnit = grpcMsec,
   compress = false
-): GrpcStream =
+): GrpcClientStream =
   ## Client stream
-  newGrpcStream(
-    gtClient, newClientStream(client), path, timeout, timeoutUnit, compress
+  doAssert timeout < 100_000_000
+  GrpcClientStream(
+    stream: newClientStream(client),
+    path: grpcNewStringRef(path),
+    compress: compress,
+    timeout: timeout,
+    timeoutUnit: timeoutUnit,
+    headers: grpcNewStringRef(),
+    buff: Buff(s: grpcNewSeqRef[byte](), pos: 0)
   )
 
 func `$`(typ: GrpcTimeoutUnit): char =
@@ -90,10 +83,9 @@ func `$`(typ: GrpcTimeoutUnit): char =
   of grpcUsec: 'u'
   of grpcNsec: 'n'
 
-func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
+func headersOut*(strm: GrpcStreamBase): Headers {.raises: [].} =
   var headers = newSeqOfCap[(string, string)](16)
-  case strm.typ
-  of gtClient:
+  if strm of GrpcClientStream:
     headers.add (":method", "POST")
     headers.add (":scheme", "https")
     headers.add (":path", strm.path[])
@@ -106,7 +98,7 @@ func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
       headers.add ("grpc-encoding", "gzip")
     if strm.timeout > 0:
       headers.add ("grpc-timeout", $strm.timeout & $strm.timeoutUnit)
-  of gtServer:
+  else:
     headers.add (":status", "200")
     headers.add ("grpc-accept-encoding", "identity, gzip, deflate")
     headers.add ("content-type", "application/grpc+proto")
@@ -114,39 +106,53 @@ func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
       headers.add ("grpc-encoding", "gzip")
   return grpcNewSeqRef(headers)
 
-proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
+proc sendHeaders*(strm: GrpcStreamBase, headers: Headers) {.async.} =
   grpcCheck not strm.deadlineEx, newGrpcFailure grpcDeadlineEx
   grpcCheck not strm.canceled, newGrpcFailure grpcCancelled
   grpcCheck not strm.headersSent
   strm.headersSent = true
   grpcCatchHyperx await strm.stream.sendHeaders(headers[], finish = false)
 
-proc sendHeaders*(strm: GrpcStream): Future[void] =
+proc sendHeaders*(strm: GrpcStreamBase): Future[void] =
   strm.sendHeaders(strm.headersOut)
 
-proc sendMessage*(
-  strm: GrpcStream, data: ref seq[byte], finish = false
+proc sendMessageImpl(
+  strm: GrpcStreamBase, data: ref seq[byte], finish: bool
 ) {.async.} =
-  doAssert not (finish and strm.typ == gtServer),
-    "the server cannot set finish; the trailers end the stream"
   if not strm.headersSent:
     await strm.sendHeaders()
   grpcCheck not strm.deadlineEx, newGrpcFailure grpcDeadlineEx
   grpcCheck not strm.canceled, newGrpcFailure grpcCancelled
   grpcCatchHyperx await strm.stream.sendBody(data, finish)
 
-proc sendMessage*[T](
-  strm: GrpcStream, msg: T, finish = false, compress = false
+proc sendMessage*(strm: GrpcStream, data: ref seq[byte]): Future[void] =
+  ## There is no finish; the server trailers end the stream
+  strm.sendMessageImpl(data, finish = false)
+
+proc sendMessage*(
+  strm: GrpcClientStream, data: ref seq[byte], finish = false
 ): Future[void] =
-  if strm.typ == gtClient and compress:
+  strm.sendMessageImpl(data, finish)
+
+proc sendMessage*[T](
+  strm: GrpcStream, msg: T, compress = false
+): Future[void] =
+  ## There is no finish; the server trailers end the stream
+  let data = grpcPbEncode(msg, compress and strm.compress)
+  result = strm.sendMessage(data)
+
+proc sendMessage*[T](
+  strm: GrpcClientStream, msg: T, finish = false, compress = false
+): Future[void] =
+  if compress:
     doAssert strm.compress, "stream compression is not enabled"
   let data = grpcPbEncode(msg, compress and strm.compress)
   result = strm.sendMessage(data, finish = finish)
 
-proc sendEnd*(strm: GrpcStream): Future[void] =
+proc sendEnd*(strm: GrpcClientStream): Future[void] =
   strm.sendMessage(grpcNewSeqRef[byte](), finish = true)
 
-proc sendCancel*(strm: GrpcStream) {.async.} =
+proc sendCancel*(strm: GrpcStreamBase) {.async.} =
   # XXX maybe just raise cancel error here
   strm.canceled = true
   grpcCatchHyperx await strm.stream.cancel(hyxCancel)
@@ -154,15 +160,15 @@ proc sendCancel*(strm: GrpcStream) {.async.} =
 proc sendNoError*(strm: GrpcStream) {.async.} =
   grpcCatchHyperx await strm.stream.cancel(hyxNoError)
 
-proc isRecvEmpty*(strm: GrpcStream): bool =
+proc isRecvEmpty*(strm: GrpcStreamBase): bool =
   ## Return whether there is data left in the buffer.
   ## Even if true, recv may not have ended.
   result = strm.buff.len == 0
 
-proc recvEnded*(strm: GrpcStream): bool =
+proc recvEnded*(strm: GrpcStreamBase): bool =
   result = strm.stream.recvEnded and strm.buff.len == 0
 
-proc recvHeaders*(strm: GrpcStream) {.async.} =
+proc recvHeaders*(strm: GrpcStreamBase) {.async.} =
   doAssert strm.headers[].len == 0
   #check not strm.canceled, newGrpcFailure grpcCancelled
   let headers = grpcNewSeqRef[byte]()
@@ -187,11 +193,11 @@ func hasFullRecord(data: openArray[byte]): bool =
   result = data.len >= data.recordSize
 
 proc recvMessage*(
-  strm: GrpcStream, data: ref seq[byte]
+  strm: GrpcStreamBase, data: ref seq[byte]
 ): Future[bool] {.async.} =
   ## Adds a single record to data. It will add nothing
   ## if recv ends.
-  if not strm.headersSent and strm.typ == gtClient:
+  if not strm.headersSent and strm of GrpcClientStream:
     await strm.sendHeaders(strm.headersOut)
   if strm.headers[].len == 0:
     await strm.recvHeaders()
@@ -206,7 +212,7 @@ proc recvMessage*(
     strm.buff.truncate()
   result = L > 0
 
-proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
+proc recvMessage*[T](strm: GrpcStreamBase, t: typedesc[T]): Future[T] {.async.} =
   ## An error is raised if the stream recv ends without a message.
   ## This is common to end the stream.
   let msg = grpcNewSeqRef[byte]()
@@ -214,7 +220,7 @@ proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
   grpcCheck recved, newGrpcNoMessageException()
   result = grpcPbDecode(msg, T)
 
-proc recvMessage2*[T](strm: GrpcStream, t: typedesc[T]): Future[(bool, T)] {.async.} =
+proc recvMessage2*[T](strm: GrpcStreamBase, t: typedesc[T]): Future[(bool, T)] {.async.} =
   ## Return true if message was compressed, otherwise return false.
   let msg = grpcNewSeqRef[byte]()
   let recved = await strm.recvMessage(msg)
@@ -222,14 +228,14 @@ proc recvMessage2*[T](strm: GrpcStream, t: typedesc[T]): Future[(bool, T)] {.asy
   result[0] = msg[][0] == 1
   result[1] = grpcPbDecode(msg, T)
 
-proc recvEnd*(strm: GrpcStream) {.async.} =
+proc recvEnd*(strm: GrpcStreamBase) {.async.} =
   let recvData = grpcNewSeqRef[byte]()
   let recved = await strm.recvMessage(recvData)
   grpcCheck recvData[].len == 0
   grpcCheck strm.recvEnded
   grpcCheck not recved
 
-template whileRecvMessages*(strm: GrpcStream, body: untyped): untyped =
+template whileRecvMessages*(strm: GrpcStreamBase, body: untyped): untyped =
   try:
     while not strm.recvEnded:
       body
@@ -243,7 +249,7 @@ proc failSilently*(fut: Future[void]) {.async.} =
   except HyperxError, GrpcFailure:
     grpcDebugErr getCurrentException()
 
-proc testBuffAll*(strm: GrpcStream) {.async.} =
+proc testBuffAll*(strm: GrpcStreamBase) {.async.} =
   ## for testing purposes; buff all recv data
   if strm.headers[].len == 0:
     await strm.recvHeaders()

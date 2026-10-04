@@ -24,7 +24,7 @@ export
   sendEnd,
   sendCancel,
   whileRecvMessages,
-  GrpcStream,
+  GrpcClientStream,
   newGrpcStream,
   headersOut,
   sendHeaders,
@@ -32,7 +32,7 @@ export
   protobuf,
   trace
 
-func timeoutMillis(strm: GrpcStream): int {.raises: [].} =
+func timeoutMillis(strm: GrpcClientStream): int {.raises: [].} =
   template tt: untyped = strm.timeout
   case strm.timeoutUnit
   of grpcHour: tt * 3600000
@@ -42,7 +42,7 @@ func timeoutMillis(strm: GrpcStream): int {.raises: [].} =
   of grpcUsec: max(1, tt div 1000)
   of grpcNsec: max(1, tt div 1_000_000)
 
-proc deadlineTask(strm: GrpcStream) {.async.} =
+proc deadlineTask(strm: GrpcClientStream) {.async.} =
   ## Meant to be asyncCheck'd
   doAssert strm.timeout > 0
   let timeout = strm.timeoutMillis
@@ -56,8 +56,7 @@ proc deadlineTask(strm: GrpcStream) {.async.} =
   if strm.deadlineEx:
     await failSilently strm.sendCancel()
 
-template with*(strm: GrpcStream, body: untyped): untyped =
-  doAssert strm.typ == gtClient
+template with*(strm: GrpcClientStream, body: untyped): untyped =
   var failure = false
   var failureCode = grpcInternal
   var remoteFailure: ref GrpcRemoteFailure = nil
