@@ -94,9 +94,8 @@ template with*(strm: GrpcStream, body: untyped): untyped =
   strm.headers[].add strm.stream.recvTrailers
   grpcDebugInfo strm.headers[]
   grpcCheck not strm.deadlineEx, newGrpcFailure(grpcDeadlineEx)
-  let r = toGrpcRespHeaders(strm.headers[])
-  if remoteFailure != nil and r.status == grpcUnknown:
+  if remoteFailure != nil and not hasGrpcStatus(strm.headers[]):
     raise remoteFailure
   grpcCheck not strm.canceled, newGrpcFailure(grpcCancelled)
-  checkResponseError(r)
+  checkResponseError(toGrpcRespHeaders(strm.headers[]))
   grpcCheck not failure, newGrpcFailure(failureCode)

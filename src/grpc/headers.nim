@@ -61,6 +61,12 @@ func checkResponseError*(r: GrpcResponseHeaders) {.raises: [GrpcResponseError].}
   if r.status != grpcOk:
     raise newGrpcResponseError(r.status, r.statusMsg)
 
+func hasGrpcStatus*(s: string): bool =
+  for (nn, _) in headersIt s:
+    if toOpenArray(s, nn.a, nn.b) == "grpc-status":
+      return true
+  false
+
 func toMillis(tt: int, unit: char): int {.raises: [GrpcFailure].} =
   case unit
   of 'H':
