@@ -12,103 +12,66 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        nim: [2.0.14, 2.2.4, 2.2.10]
+        nim: [2.0.x, 2.2.x, devel]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+    - uses: jiro4989/setup-nim-action@v2
+      with:
+        nim-version: ${{ matrix.nim }}
+        use-nightlies: true
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Setup
+      run: |
+        nimble install -y --depsOnly
+        sudo apt update
+        sudo apt install -y make 
+        sudo make install_mkcert
+        cat .env >> $GITHUB_ENV
+      #  cat ./example.com+5.pem
+      #  cat ./example.com+5-key.pem
+      #  echo $HYPERX_TEST_CERTFILE
+      #  echo $HYPERX_TEST_KEYFILE
     - name: Run Interop Tests
       run: |
-        docker pull nimlang/nim:${{ matrix.nim }}
-        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
-        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
-          apt update && \
-          apt install -y make && \ 
-          make install_mkcert && \
-          nimble install -y --depsOnly && \
-          (nimble interopserve &) && \
-          sleep 10s && \
-          nimble interoptest"
+        (nimble interopserve &)
+        sleep 10s
+        nimble interoptest
     - name: Run tls examples
       run: |
-        docker pull nimlang/nim:${{ matrix.nim }}
-        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
-        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
-          apt update && \
-          apt install -y make && \ 
-          make install_mkcert && \
-          nimble install -y --depsOnly && \
-          (nimble exampleserve &) && \
-          sleep 10s && \
-          nimble exampleclient"
+        (nimble exampleserve &)
+        sleep 10s
+        nimble exampleclient
     - name: Run insecure examples
       run: |
-        docker pull nimlang/nim:${{ matrix.nim }}
-        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
-        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
-          apt update && \
-          apt install -y make && \ 
-          make install_mkcert && \
-          nimble install -y --depsOnly && \
-          (nimble exampleserveinsecure &) && \
-          sleep 10s && \
-          nimble exampleclientinsecure"
+        (nimble exampleserveinsecure &)
+        sleep 10s
+        nimble exampleclientinsecure
     - name: Run multi-thread examples
       run: |
-        docker pull nimlang/nim:${{ matrix.nim }}
-        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
-        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
-          apt update && \
-          apt install -y make && \ 
-          make install_mkcert && \
-          nimble install -y --depsOnly && \
-          (nimble exampleservemultithread &) && \
-          sleep 10s && \
-          nimble exampleclientinsecure"
+        (nimble exampleservemultithread &)
+        sleep 10s
+        nimble exampleclientinsecure
     - name: Run Tests
       run: |
-        docker pull nimlang/nim:${{ matrix.nim }}
-        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
-        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
-          apt update && \
-          apt install -y make && \ 
-          make install_mkcert && \
-          nimble install -y --depsOnly && \
-          (nimble testserve &) && \
-          sleep 10s && \
-          nimble testclient"
+        (nimble testserve &)
+        sleep 10s
+        nimble testclient
     - name: Run Go server interop tests
       run: |
-        docker pull nimlang/nim:${{ matrix.nim }}
-        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
-        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
-          apt update && \
-          apt install -y make && \ 
-          make install_mkcert && \
-          nimble install -y --depsOnly && \
-          curl -JLO \"https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_server\" && \
-          chmod +x ./go_server && \
-          (nimble gointeropserve &) && \
-          sleep 10s && \
-          nimble interoptest2"
+        curl -JLO \"https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_server\"
+        chmod +x ./go_server
+        (nimble gointeropserve &)
+        sleep 10s
+        nimble interoptest2
     - name: Run Go client interop tests
       run: |
-        docker pull nimlang/nim:${{ matrix.nim }}
-        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
-        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
-          apt update && \
-          apt install -y make && \ 
-          make install_mkcert && \
-          nimble install -y --depsOnly && \
-          curl -JLO \"https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_client\" && \
-          chmod +x ./go_client && \
-          (nim c -r tests/interop/testserver.nim &) && \
-          sleep 10s && \
-          nimble gointeroptest"
+        curl -JLO \"https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_client\"
+        chmod +x ./go_client
+        (nim c -r tests/interop/testserver.nim &)
+        sleep 10s
+        nimble gointeroptest
     - name: Run Functional Tests
       run: |
-        docker pull nimlang/nim:${{ matrix.nim }}
-        docker run --env-file .env  --rm -v `pwd`:/usr/src/app -w /usr/src/app nimlang/nim:${{ matrix.nim }} \
-        /bin/bash -c "git config --global --add safe.directory /usr/src/app && \
-          nimble install -y --depsOnly && \
-          (nimble testfuncserve &) && \
-          sleep 10s && \
-          nimble testfuncclient"
+        (nimble testfuncserve &)
+        sleep 10s
+        nimble testfuncclient
