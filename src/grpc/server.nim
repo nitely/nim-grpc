@@ -4,6 +4,7 @@ import std/times
 import std/monotimes
 
 import pkg/hyperx/server
+import pkg/hyperx/errors
 
 import ./clientserver
 import ./errors
@@ -39,7 +40,8 @@ func trailersOut*(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Headers =
   if msg.len > 0:
     result[].add ("grpc-message", grpcPercentEnc msg)
 
-proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
+template sendTrailersImpl(strm: GrpcStream, headers: Headers) =
+  ## Inlined in async procs to avoid a Future per call
   doAssert strm.typ == gtServer
   grpcCheck not strm.stream.sendEnded
   grpcCheck not strm.trailersSent
@@ -50,6 +52,9 @@ proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
     headers2 = strm.headersOut()
     headers2[].add headers[]
   grpcCatchHyperx await strm.stream.sendHeaders(headers2[], finish = true)
+
+proc sendTrailers*(strm: GrpcStream, headers: Headers) {.async.} =
+  sendTrailersImpl(strm, headers)
 
 proc sendTrailers(strm: GrpcStream, status: GrpcStatusCode, msg = ""): Future[void] =
   strm.sendTrailers(strm.trailersOut(status, msg))
@@ -72,12 +77,13 @@ proc deadlineTask(strm: GrpcStream, timeout: int) {.async.} =
       await failSilently strm.sendTrailers(grpcDeadlineEx)
       await failSilently strm.sendCancel()
 
-proc processStream(
+template processStreamImpl(
   strm: GrpcStream, routes: GrpcRoutes | GrpcSafeRoutes2
-) {.async.} =
+) =
+  ## Inlined in the async proc below to avoid a Future per call
   var deadlineFut: Future[void] = nil
   try:
-    await strm.recvHeaders()
+    recvHeadersImpl(strm)
     let reqHeaders = toRequestHeaders strm.headers[]
     strm.compress = reqHeaders.compress
     grpcCheck reqHeaders.path in routes[], newGrpcFailure grpcNotFound
@@ -86,7 +92,7 @@ proc processStream(
     await routes[][reqHeaders.path](strm)
     grpcCheck strm.isRecvEmpty() or strm.canceled, newGrpcFailure grpcInternal
     if not strm.trailersSent:
-      await strm.sendTrailers(grpcOk)
+      sendTrailersImpl(strm, strm.trailersOut(grpcOk))
   except GrpcRemoteFailure as err:
     raise err
   except GrpcFailure as err:
@@ -104,13 +110,17 @@ proc processStream(
     elif deadlineFut != nil:
       asyncCheck deadlineFut
     deadlineFut = nil
-    await failSilently strm.sendNoError()
+    try:
+      await strm.stream.cancel(hyxNoError)
+    except HyperxError:
+      grpcDebugErr getCurrentException()
 
 proc processStream(
   strm: ClientStream, routes: GrpcRoutes | GrpcSafeRoutes2
 ) {.async.} =
+  let gstrm = newGrpcStream(strm)
   try:
-    await processStream(newGrpcStream(strm), routes)
+    processStreamImpl(gstrm, routes)
   except CatchableError:
     grpcDebugErr getCurrentException()
 

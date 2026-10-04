@@ -114,12 +114,16 @@ func headersOut*(strm: GrpcStream): Headers {.raises: [].} =
       headers.add ("grpc-encoding", "gzip")
   return grpcNewSeqRef(headers)
 
-proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
+template sendHeadersImpl(strm: GrpcStream, headers: Headers) =
+  ## Inlined in async procs to avoid a Future per call
   grpcCheck not strm.deadlineEx, newGrpcFailure grpcDeadlineEx
   grpcCheck not strm.canceled, newGrpcFailure grpcCancelled
   grpcCheck not strm.headersSent
   strm.headersSent = true
   grpcCatchHyperx await strm.stream.sendHeaders(headers[], finish = false)
+
+proc sendHeaders*(strm: GrpcStream, headers: Headers) {.async.} =
+  sendHeadersImpl(strm, headers)
 
 proc sendHeaders*(strm: GrpcStream): Future[void] =
   strm.sendHeaders(strm.headersOut)
@@ -128,7 +132,7 @@ proc sendMessage*(
   strm: GrpcStream, data: ref seq[byte], finish = false
 ) {.async.} =
   if not strm.headersSent:
-    await strm.sendHeaders()
+    sendHeadersImpl(strm, strm.headersOut)
   grpcCheck not strm.deadlineEx, newGrpcFailure grpcDeadlineEx
   grpcCheck not strm.canceled, newGrpcFailure grpcCancelled
   grpcCatchHyperx await strm.stream.sendBody(data, finish)
@@ -160,12 +164,16 @@ proc isRecvEmpty*(strm: GrpcStream): bool =
 proc recvEnded*(strm: GrpcStream): bool =
   result = strm.stream.recvEnded and strm.buff.len == 0
 
-proc recvHeaders*(strm: GrpcStream) {.async.} =
+template recvHeadersImpl*(strm: GrpcStream) =
+  ## Inlined in async procs to avoid a Future per call
   doAssert strm.headers[].len == 0
   #check not strm.canceled, newGrpcFailure grpcCancelled
   let headers = grpcNewSeqRef[byte]()
   grpcCatchHyperx await strm.stream.recvHeaders(headers)
   strm.headers[].add headers[].toString
+
+proc recvHeaders*(strm: GrpcStream) {.async.} =
+  recvHeadersImpl(strm)
 
 func recordSize(data: openArray[byte]): int =
   if data.len == 0:
@@ -184,31 +192,38 @@ func hasFullRecord(data: openArray[byte]): bool =
     return false
   result = data.len >= data.recordSize
 
-proc recvMessage*(
-  strm: GrpcStream, data: ref seq[byte]
-): Future[bool] {.async.} =
-  ## Adds a single record to data. It will add nothing
-  ## if recv ends.
+template recvMessageImpl(
+  strm: GrpcStream, dst: ref seq[byte], recved: var bool
+) =
+  ## Inlined in async procs to avoid a Future per call
   if not strm.headersSent and strm.typ == gtClient:
-    await strm.sendHeaders(strm.headersOut)
+    sendHeadersImpl(strm, strm.headersOut)
   if strm.headers[].len == 0:
-    await strm.recvHeaders()
+    recvHeadersImpl(strm)
   while not strm.stream.recvEnded and not strm.buff.data.hasFullRecord:
     #check not strm.canceled, newGrpcFailure grpcCancelled
     grpcCatchHyperx await strm.stream.recvBody(strm.buff.s)
   grpcCheck strm.buff.data.hasFullRecord or strm.buff.len == 0
   let L = strm.buff.data.recordSize
-  data[].add2 toOpenArray(strm.buff.data, 0, L-1)
+  dst[].add2 toOpenArray(strm.buff.data, 0, L-1)
   strm.buff.pos += L
   if not strm.buff.data.hasFullRecord:
     strm.buff.truncate()
-  result = L > 0
+  recved = L > 0
+
+proc recvMessage*(
+  strm: GrpcStream, data: ref seq[byte]
+): Future[bool] {.async.} =
+  ## Adds a single record to data. It will add nothing
+  ## if recv ends.
+  recvMessageImpl(strm, data, result)
 
 proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
   ## An error is raised if the stream recv ends without a message.
   ## This is common to end the stream.
   let msg = grpcNewSeqRef[byte]()
-  let recved = await strm.recvMessage(msg)
+  var recved = false
+  recvMessageImpl(strm, msg, recved)
   grpcCheck recved, newGrpcNoMessageException()
   result = grpcPbDecode(msg, T)
 
