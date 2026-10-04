@@ -123,6 +123,28 @@ testAsync "big_payload_stream":
         inc checked
   doAssert checked == 3
 
+testAsync "partial_message_buffered":
+  # ~40KB replies; waiting lets the 64KB window fill with
+  # a full reply plus part of the next one before the first recv
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(testHelloUniPath)
+    with stream:
+      var payload = ""
+      for i in 0 .. 40_000:
+        payload.add "abcdefg"[i mod 7]
+      await stream.sendMessage(HelloRequest(name: payload))
+      await sleepAsync(200)
+      var i = 0
+      whileRecvMessages stream:
+        let reply = await stream.recvMessage(HelloReply)
+        doAssert reply.message == "Hello, " & payload & " " & $i
+        inc i
+      doAssert i == 10
+      inc checked
+  doAssert checked == 1
+
 testAsync "deadline":
   var checked = 0
   var client = newClient(localHost, localPort)
