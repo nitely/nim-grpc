@@ -33,7 +33,7 @@ testAsync "simple_request":
   with client:
     let stream = client.newGrpcStream(testHelloPath)
     with stream:
-      await stream.sendMessage(HelloRequest(name: "you"))
+      await stream.sendMessage(HelloRequest(name: "you"), finish = true)
       let reply = await stream.recvMessage(HelloReply)
       doAssert reply.message == "Hello, you"
       inc checked
@@ -46,7 +46,7 @@ testAsync "simple_request_2":
     for i in 0 .. 2:
       let stream = client.newGrpcStream(testHelloPath)
       with stream:
-        await stream.sendMessage(HelloRequest(name: "you" & $i))
+        await stream.sendMessage(HelloRequest(name: "you" & $i), finish = true)
         let reply = await stream.recvMessage(HelloReply)
         doAssert reply.message == "Hello, you" & $i
         inc checked
@@ -59,7 +59,7 @@ testAsync "error_propagation":
     with client:
       let stream = client.newGrpcStream(testHelloPath)
       with stream:
-        await stream.sendMessage(HelloRequest(name: "you"))
+        await stream.sendMessage(HelloRequest(name: "you"), finish = true)
         raise newException(ValueError, "test foo")
   except ValueError as err:
     doAssert err.msg == "test foo"
@@ -103,7 +103,7 @@ testAsync "big_payload":
       var payload = ""
       for i in 0 .. 123_123:
         payload.add "abcdefg"[i mod 7]
-      await stream.sendMessage(HelloRequest(name: payload))
+      await stream.sendMessage(HelloRequest(name: payload), finish = true)
       let reply = await stream.recvMessage(HelloReply)
       doAssert reply.message == "Hello, " & payload
       inc checked
@@ -119,7 +119,7 @@ testAsync "big_payload_stream":
       for i in 0 .. 123_123:
         payload.add "abcdefg"[i mod 7]
       for i in 0 .. 2:
-        await stream.sendMessage(HelloRequest(name: payload & $i))
+        await stream.sendMessage(HelloRequest(name: payload & $i), finish = i == 2)
         let reply = await stream.recvMessage(HelloReply)
         doAssert reply.message == "Hello, " & payload & $i
         inc checked
@@ -136,7 +136,7 @@ testAsync "partial_message_buffered":
       var payload = ""
       for i in 0 .. 40_000:
         payload.add "abcdefg"[i mod 7]
-      await stream.sendMessage(HelloRequest(name: payload))
+      await stream.sendMessage(HelloRequest(name: payload), finish = true)
       await sleepAsync(200)
       var i = 0
       whileRecvMessages stream:
@@ -154,7 +154,7 @@ testAsync "deadline":
     let stream = client.newGrpcStream(testHelloPath, timeout = 1)
     try:
       with stream:
-        #await stream.sendMessage(HelloRequest(name: "you"))
+        #await stream.sendMessage(HelloRequest(name: "you"), finish = true)
         discard await stream.recvMessage(HelloReply)
         doAssert false
     except GrpcFailure as err:
@@ -168,7 +168,7 @@ testAsync "deadline_not_reached":
   with client:
     let stream = client.newGrpcStream(testHelloPath, timeout = 1, timeoutUnit = grpcHour)
     with stream:
-      await stream.sendMessage(HelloRequest(name: "you"))
+      await stream.sendMessage(HelloRequest(name: "you"), finish = true)
       let reply = await stream.recvMessage(HelloReply)
       doAssert reply.message == "Hello, you"
       inc checked
@@ -183,7 +183,7 @@ testAsync "stream_response":
   with client:
     let stream = client.newGrpcStream(testHelloUniPath)
     with stream:
-      await stream.sendMessage(HelloRequest(name: "you"))
+      await stream.sendMessage(HelloRequest(name: "you"), finish = true)
       var i = 0
       whileRecvMessages stream:
         let reply = await stream.recvMessage(HelloReply)
@@ -199,7 +199,7 @@ testAsync "stream_response_backlog":
   with client:
     let stream = client.newGrpcStream(testHelloUniPath)
     with stream:
-      await stream.sendMessage(HelloRequest(name: "you"))
+      await stream.sendMessage(HelloRequest(name: "you"), finish = true)
       await stream.testBuffAll()
       var i = 0
       whileRecvMessages stream:
@@ -232,3 +232,24 @@ testAsync "remote_failure_not_cancelled":
       await lt.spawn client.call()
     await lt.join()
   doAssert codes == {grpcInternal}, $codes
+
+testAsync "send_end_without_finish":
+  # finish is never set, so the with block must end the stream
+  # (sendEnd); the bidi handler only returns after that. The
+  # deadline makes a missing sendEnd fail instead of hang
+  var checked = 0
+  var client = newClient(localHost, localPort)
+  with client:
+    let stream = client.newGrpcStream(
+      testHelloBidiPath, timeout = 5, timeoutUnit = grpcSecond
+    )
+    with stream:
+      for i in 0 .. 2:
+        await stream.sendMessage(HelloRequest(name: "you" & $i))
+        let reply = await stream.recvMessage(HelloReply)
+        doAssert reply.message == "Hello, you" & $i
+        inc checked
+  doAssert checked == 3
+  # wait for deadline to expire
+  while hasPendingOperations():
+    await sleepAsync(1)

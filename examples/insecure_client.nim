@@ -8,7 +8,7 @@ import ./pbtypes
 proc sayHello(client: ClientContext) {.async.} =
   let stream = client.newGrpcStream(GreeterSayHelloPath)
   with stream:
-    await stream.sendMessage(HelloRequest(name: "you"))
+    await stream.sendMessage(HelloRequest(name: "you"), finish = true)
     let reply = await stream.recvMessage(HelloReply)
     doAssert reply.message == "Hello, you"
 

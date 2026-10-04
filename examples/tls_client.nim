@@ -13,14 +13,14 @@ proc main() {.async.} =
       echo "Simple request"
       let stream = client.newGrpcStream(GreeterSayHelloPath)
       with stream:
-        await stream.sendMessage(HelloRequest(name: "you"))
+        await stream.sendMessage(HelloRequest(name: "you"), finish = true)
         let reply = await stream.recvMessage(HelloReply)
         doAssert reply.message == "Hello, you"
     block:
       echo "Stream reply"
       let stream = client.newGrpcStream(GreeterSayHelloStreamReplyPath)
       with stream:
-        await stream.sendMessage(HelloRequest(name: "you"))
+        await stream.sendMessage(HelloRequest(name: "you"), finish = true)
         var i = 0
         whileRecvMessages stream:
           let reply = await stream.recvMessage(HelloReply)
@@ -32,6 +32,16 @@ proc main() {.async.} =
       let stream = client.newGrpcStream(GreeterSayHelloBidiStreamPath)
       with stream:
         for i in 0 .. 2:
+          await stream.sendMessage(HelloRequest(name: "count " & $i), finish = i == 2)
+          let reply = await stream.recvMessage(HelloReply)
+          doAssert reply.message == "Hello, count " & $i
+    block:
+      echo "Bidirectional stream with unknown ending"
+      let stream = client.newGrpcStream(GreeterSayHelloBidiStreamPath)
+      with stream:
+        for i in 0 .. 2:
+          # it's better to set finish when possible to close the stream local side early;
+          # but when not possible (ie: in an unending stream), it's ok.
           await stream.sendMessage(HelloRequest(name: "count " & $i))
           let reply = await stream.recvMessage(HelloReply)
           doAssert reply.message == "Hello, count " & $i
