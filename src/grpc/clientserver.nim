@@ -1,6 +1,5 @@
 
 import std/asyncdispatch
-import std/strbasics
 
 import pkg/hyperx/client
 import pkg/hyperx/errors
@@ -9,7 +8,7 @@ import ./errors
 import ./utils
 
 type Buff = object
-  s: ref string
+  s: ref seq[byte]
   pos: int
 
 template data(buff: Buff): untyped =
@@ -19,7 +18,11 @@ func len(buff: Buff): int {.inline.} =
   buff.s[].len-buff.pos
 
 func truncate(buff: var Buff) =
-  buff.s[].setSlice buff.pos .. buff.len-1
+  ## Drop the consumed bytes, keep the rest
+  let L = buff.len
+  if L > 0:
+    moveMem(addr buff.s[][0], addr buff.s[][buff.pos], L)
+  buff.s[].setLen L
   buff.pos = 0
 
 type Headers* = ref seq[(string, string)]
@@ -59,7 +62,7 @@ proc newGrpcStream(
     timeout: timeout,
     timeoutUnit: timeoutUnit,
     headers: grpcNewStringRef(),
-    buff: Buff(s: grpcNewStringRef(), pos: 0)
+    buff: Buff(s: grpcNewSeqRef[byte](), pos: 0)
   )
 
 proc newGrpcStream*(stream: ClientStream): GrpcStream =
@@ -122,7 +125,7 @@ proc sendHeaders*(strm: GrpcStream): Future[void] =
   strm.sendHeaders(strm.headersOut)
 
 proc sendMessage*(
-  strm: GrpcStream, data: ref string, finish = false
+  strm: GrpcStream, data: ref seq[byte], finish = false
 ) {.async.} =
   if not strm.headersSent:
     await strm.sendHeaders()
@@ -139,7 +142,7 @@ proc sendMessage*[T](
   result = strm.sendMessage(data, finish = finish)
 
 proc sendEnd*(strm: GrpcStream): Future[void] =
-  strm.sendMessage(grpcNewStringRef(), finish = true)
+  strm.sendMessage(grpcNewSeqRef[byte](), finish = true)
 
 proc sendCancel*(strm: GrpcStream) {.async.} =
   # XXX maybe just raise cancel error here
@@ -160,9 +163,11 @@ proc recvEnded*(strm: GrpcStream): bool =
 proc recvHeaders*(strm: GrpcStream) {.async.} =
   doAssert strm.headers[].len == 0
   #check not strm.canceled, newGrpcFailure grpcCancelled
-  grpcCatchHyperx await strm.stream.recvHeaders(strm.headers)
+  let headers = grpcNewSeqRef[byte]()
+  grpcCatchHyperx await strm.stream.recvHeaders(headers)
+  strm.headers[].add headers[].toString
 
-func recordSize(data: openArray[char]): int =
+func recordSize(data: openArray[byte]): int =
   if data.len == 0:
     return 0
   doAssert data.len >= 5
@@ -174,13 +179,13 @@ func recordSize(data: openArray[char]): int =
   # XXX check bit 31 is not set
   result = L.int+5
 
-func hasFullRecord(data: openArray[char]): bool =
+func hasFullRecord(data: openArray[byte]): bool =
   if data.len < 5:
     return false
   result = data.len >= data.recordSize
 
 proc recvMessage*(
-  strm: GrpcStream, data: ref string
+  strm: GrpcStream, data: ref seq[byte]
 ): Future[bool] {.async.} =
   ## Adds a single record to data. It will add nothing
   ## if recv ends.
@@ -193,30 +198,38 @@ proc recvMessage*(
     grpcCatchHyperx await strm.stream.recvBody(strm.buff.s)
   grpcCheck strm.buff.data.hasFullRecord or strm.buff.len == 0
   let L = strm.buff.data.recordSize
-  data[].add toOpenArray(strm.buff.data, 0, L-1)
+  data[].add2 toOpenArray(strm.buff.data, 0, L-1)
   strm.buff.pos += L
   if not strm.buff.data.hasFullRecord:
     strm.buff.truncate()
   result = L > 0
 
+proc recvMessage*(
+  strm: GrpcStream, data: ref string
+): Future[bool] {.async.} =
+  ## Compat; prefer the ``ref seq[byte]`` version
+  let b = grpcNewSeqRef[byte]()
+  result = await strm.recvMessage(b)
+  data[].add b[].toString
+
 proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
   ## An error is raised if the stream recv ends without a message.
   ## This is common to end the stream.
-  let msg = grpcNewStringRef()
+  let msg = grpcNewSeqRef[byte]()
   let recved = await strm.recvMessage(msg)
   grpcCheck recved, newGrpcNoMessageException()
   result = grpcPbDecode(msg, T)
 
 proc recvMessage2*[T](strm: GrpcStream, t: typedesc[T]): Future[(bool, T)] {.async.} =
   ## Return true if message was compressed, otherwise return false.
-  let msg = grpcNewStringRef()
+  let msg = grpcNewSeqRef[byte]()
   let recved = await strm.recvMessage(msg)
   grpcCheck recved, newGrpcNoMessageException()
-  result[0] = msg[][0] == 1.char
+  result[0] = msg[][0] == 1
   result[1] = grpcPbDecode(msg, T)
 
 proc recvEnd*(strm: GrpcStream) {.async.} =
-  let recvData = new string
+  let recvData = grpcNewSeqRef[byte]()
   let recved = await strm.recvMessage(recvData)
   grpcCheck recvData[].len == 0
   grpcCheck strm.recvEnded

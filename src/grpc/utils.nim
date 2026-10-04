@@ -80,39 +80,55 @@ func grpcNewSeqRef*[T](s: sink seq[T] = @[]): ref seq[T] =
   new result
   result[] = s
 
-proc grpcToWireData*(msg: string, compress = false): string {.raises: [GrpcFailure].} =
+template setLenUninit2*(s, newlen: untyped): untyped =
+  when (NimMajor, NimMinor, NimPatch) >= (2, 2, 10):
+    setLenUninit(s, newlen)
+  else:
+    setLen(s, newlen)
+
+func add2*(s: var seq[byte], x: openArray[byte]) {.inline, raises: [].} =
+  ## Faster than system's add, which copies byte by byte
+  if x.len > 0:
+    let L = s.len
+    s.setLenUninit2(L+x.len)
+    copyMem(addr s[L], addr x[0], x.len)
+
+func toString*(s: openArray[byte]): string {.raises: [].} =
+  ## Copy bytes into a string; for the public APIs that use strings
+  result = newString(s.len)
+  when nimvm:
+    for i in 0 ..< s.len:
+      result[i] = s[i].char
+  else:
+    if s.len > 0:
+      copyMem(addr result[0], addr s[0], s.len)
+
+proc grpcToWireData*(msg: seq[byte], compress = false): seq[byte] {.raises: [GrpcFailure].} =
   template ones(n: untyped): uint = (1.uint shl n) - 1
   let compress = compress and msg.len > 860
+  result = newSeq[byte](5)
   if compress:
-    let msgc = grpcCatch zippy.compress(msg, BestSpeed, dfGzip)
-    result = newString(msgc.len+5)
-    for i in 0 .. msgc.len-1:
-      result[i+5] = msgc[i]
+    result.add2 grpcCatch(zippy.compress(msg, BestSpeed, dfGzip))
   else:
-    result = newString(msg.len+5)
-    for i in 0 .. msg.len-1:
-      result[i+5] = msg[i]
+    result.add2 msg
   let L = (result.len-5).uint
-  result[0] = compress.char
-  result[1] = ((L shr 24) and 8.ones).char
-  result[2] = ((L shr 16) and 8.ones).char
-  result[3] = ((L shr 8) and 8.ones).char
-  result[4] = (L and 8.ones).char
+  result[0] = compress.byte
+  result[1] = ((L shr 24) and 8.ones).byte
+  result[2] = ((L shr 16) and 8.ones).byte
+  result[3] = ((L shr 8) and 8.ones).byte
+  result[4] = (L and 8.ones).byte
 
-proc grpcFromWireData*(data: string): string {.raises: [GrpcFailure].} =
+proc grpcFromWireData*(data: openArray[byte]): seq[byte] {.raises: [GrpcFailure].} =
   doAssert data.len >= 5
-  result = data[5 .. data.len-1]
-  if data[0] == 1.char:
+  result = @(toOpenArray(data, 5, data.len-1))
+  if data[0] == 1:
     result = grpcCatch uncompress(result)
 
-proc grpcPbEncode*[T](s: T, compress = false): ref string {.raises: [GrpcFailure].} =
+proc grpcPbEncode*[T](s: T, compress = false): ref seq[byte] {.raises: [GrpcFailure].} =
   let ee = grpcCatch Protobuf.encode(s)
-  var ss = newString(ee.len)
-  for i in 0 .. ee.len-1:
-    ss[i] = ee[i].char
-  result = grpcNewStringRef grpcToWireData(ss, compress)
+  result = grpcNewSeqRef grpcToWireData(ee, compress)
 
-proc grpcPbDecode*[T](s: ref string, t: typedesc[T]): T {.raises: [GrpcFailure].} =
+proc grpcPbDecode*[T](s: ref seq[byte], t: typedesc[T]): T {.raises: [GrpcFailure].} =
   let ss = grpcFromWireData(s[])
   result = grpcCatch Protobuf.decode(ss, t)
 
