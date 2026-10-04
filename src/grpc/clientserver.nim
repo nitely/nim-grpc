@@ -204,14 +204,6 @@ proc recvMessage*(
     strm.buff.truncate()
   result = L > 0
 
-proc recvMessage*(
-  strm: GrpcStream, data: ref string
-): Future[bool] {.async.} =
-  ## Compat; prefer the ``ref seq[byte]`` version
-  let b = grpcNewSeqRef[byte]()
-  result = await strm.recvMessage(b)
-  data[].add b[].toString
-
 proc recvMessage*[T](strm: GrpcStream, t: typedesc[T]): Future[T] {.async.} =
   ## An error is raised if the stream recv ends without a message.
   ## This is common to end the stream.
