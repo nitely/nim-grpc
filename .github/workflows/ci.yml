@@ -58,14 +58,14 @@ jobs:
         nimble testclient
     - name: Run Go server interop tests
       run: |
-        curl -JLO \"https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_server\"
+        curl -JLO "https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_server"
         chmod +x ./go_server
         (nimble gointeropserve &)
         sleep 10s
         nimble interoptest2
     - name: Run Go client interop tests
       run: |
-        curl -JLO \"https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_client\"
+        curl -JLO "https://github.com/nitely/nim-grpc/releases/download/v0.1.0/go_client"
         chmod +x ./go_client
         (nim c -r tests/interop/testserver.nim &)
         sleep 10s
