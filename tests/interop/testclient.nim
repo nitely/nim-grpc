@@ -311,7 +311,7 @@ const xInitialValue = "test_initial_metadata_value"
 const xTrailingKey = "x-grpc-test-echo-trailing-bin"
 const xTrailingValue = "0xababab"
 
-proc sendMetadata(strm: GrpcStream) {.async.} =
+proc sendMetadata(strm: GrpcClientStream) {.async.} =
   var headers = strm.headersOut
   headers[].add (xInitialKey, xInitialValue)
   headers[].add (xTrailingKey, xTrailingValue)
