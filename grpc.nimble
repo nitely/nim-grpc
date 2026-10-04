@@ -8,7 +8,8 @@ srcDir = "src"
 skipDirs = @["tests", "examples"]
 
 requires "nim >= 2.0.14"
-requires "hyperx >= 0.1.50"
+#requires "hyperx >= 0.1.50"
+requires "https://github.com/nitely/nim-hyperx#ef7836fd23c71cfea1c2f9d833db071f6ca5b5df"
 requires "protobuf_serialization >= 0.5.2"
 requires "zippy >= 0.10.14"
 
