@@ -84,6 +84,7 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         if not strm.canceled and not strm.recvEnded:
           await failSilently strm.sendCancel()
   except GrpcRemoteFailure as err:
+    # grpc-go server sends Rst no_error but trailer status is ok
     grpcDebugErr err
     remoteFailure = err
   except GrpcFailure as err:
