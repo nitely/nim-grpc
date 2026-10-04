@@ -2,6 +2,8 @@
 
 import std/asyncdispatch
 
+import pkg/hyperx/limiter
+
 import ../src/grpc
 import ../src/grpc/statuscodes
 import ./pbtypes
@@ -207,3 +209,26 @@ testAsync "stream_response_backlog":
       doAssert i == 10
       inc checked
   doAssert checked == 1
+
+testAsync "remote_failure_not_cancelled":
+  # More concurrent streams than the server allows (100) makes it
+  # close the connection with PROTOCOL_ERROR. The calls must fail
+  # with that remote error, not CANCELLED
+  var codes: set[GrpcStatusCode]
+  proc call(client: ClientContext) {.async.} =
+    try:
+      let stream = client.newGrpcStream(testHelloPath)
+      with stream:
+        await stream.sendMessage(HelloRequest(name: "you"))
+        discard await stream.recvMessage(HelloReply)
+    except GrpcFailure as err:
+      codes.incl err.code
+    except CatchableError:
+      discard
+  var client = newClient(localHost, localPort)
+  with client:
+    let lt = newLimiter(200)
+    for _ in 0 ..< 400:
+      await lt.spawn client.call()
+    await lt.join()
+  doAssert codes == {grpcInternal}, $codes

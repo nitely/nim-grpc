@@ -39,26 +39,25 @@ func parseStatusCode(raw: openArray[char]): GrpcStatusCode =
     return grpcUnknown
   return code.GrpcStatusCode
 
-type ResponseHeaders* = ref object
+type GrpcResponseHeaders* = ref object
   status*: GrpcStatusCode
   statusMsg*: string
 
-func newResponseHeaders(status: GrpcStatusCode): ResponseHeaders =
-  ResponseHeaders(
+func newGrpcResponseHeaders(status: GrpcStatusCode): GrpcResponseHeaders =
+  GrpcResponseHeaders(
     status: status,
     statusMsg: ""
   )
 
-func toResponseHeaders*(s: string): ResponseHeaders =
-  result = newResponseHeaders(grpcUnknown)
+func toGrpcRespHeaders*(s: string): GrpcResponseHeaders =
+  result = newGrpcResponseHeaders(grpcUnknown)
   for (nn, vv) in headersIt s:
     if toOpenArray(s, nn.a, nn.b) == "grpc-status":
       result.status = parseStatusCode toOpenArray(s, vv.a, vv.b)
     elif toOpenArray(s, nn.a, nn.b) == "grpc-message":
       result.statusMsg = grpcPercentDec s[vv]
 
-func checkResponseError*(s: string) {.raises: [GrpcResponseError].} =
-  let r = toResponseHeaders s
+func checkResponseError*(r: GrpcResponseHeaders) {.raises: [GrpcResponseError].} =
   if r.status != grpcOk:
     raise newGrpcResponseError(r.status, r.statusMsg)
 
@@ -90,16 +89,16 @@ func parseTimeout(raw: openArray[char]): int {.raises: [GrpcFailure].} =
       raise newGrpcFailure()
   return toMillis(timeout, raw[^1])
 
-type RequestHeaders* = ref object
+type GrpcRequestHeaders* = ref object
   path*: string
   timeout*: int
   compress*: bool
 
-func newRequestHeaders(): RequestHeaders =
-  RequestHeaders(path: "", timeout: 0, compress: false)
+func newGrpcRequestHeaders(): GrpcRequestHeaders =
+  GrpcRequestHeaders(path: "", timeout: 0, compress: false)
 
-func toRequestHeaders*(s: string): RequestHeaders {.raises: [GrpcFailure].} =
-  result = newRequestHeaders()
+func toGrpcRequestHeaders*(s: string): GrpcRequestHeaders {.raises: [GrpcFailure].} =
+  result = newGrpcRequestHeaders()
   for (nn, vv) in headersIt s:
     if toOpenArray(s, nn.a, nn.b) == ":path":
       result.path = s[vv.a .. vv.b]

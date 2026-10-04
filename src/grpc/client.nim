@@ -60,6 +60,7 @@ template with*(strm: GrpcStream, body: untyped): untyped =
   doAssert strm.typ == gtClient
   var failure = false
   var failureCode = grpcInternal
+  var remoteFailure: ref GrpcRemoteFailure = nil
   var deadlineFut: Future[void] = nil
   if strm.timeout > 0:
     deadlineFut = deadlineTask(strm)
@@ -82,10 +83,9 @@ template with*(strm: GrpcStream, body: untyped): untyped =
         deadlineFut = nil
         if not strm.canceled and not strm.recvEnded:
           await failSilently strm.sendCancel()
-  except GrpcRemoteFailure:
-    # grpc-go server sends Rst no_error but trailer status is ok
-    grpcDebugErr getCurrentException()
-    discard
+  except GrpcRemoteFailure as err:
+    grpcDebugErr err
+    remoteFailure = err
   except GrpcFailure as err:
     grpcDebugErr err
     failure = true
@@ -93,6 +93,9 @@ template with*(strm: GrpcStream, body: untyped): untyped =
   strm.headers[].add strm.stream.recvTrailers
   grpcDebugInfo strm.headers[]
   grpcCheck not strm.deadlineEx, newGrpcFailure(grpcDeadlineEx)
+  let r = toGrpcRespHeaders(strm.headers[])
+  if remoteFailure != nil and r.status == grpcUnknown:
+    raise remoteFailure
   grpcCheck not strm.canceled, newGrpcFailure(grpcCancelled)
-  checkResponseError(strm.headers[])
+  checkResponseError(r)
   grpcCheck not failure, newGrpcFailure(failureCode)
