@@ -133,14 +133,6 @@ proc sendMessage*(
   grpcCheck not strm.canceled, newGrpcFailure grpcCancelled
   grpcCatchHyperx await strm.stream.sendBody(data, finish)
 
-proc sendMessage*(
-  strm: GrpcStream, data: ref string, finish = false
-): Future[void] =
-  ## Compat; prefer the ``ref seq[byte]`` version
-  strm.sendMessage(
-    grpcNewSeqRef(@(data[].toOpenArrayByte(0, data[].high))), finish
-  )
-
 proc sendMessage*[T](
   strm: GrpcStream, msg: T, finish = false, compress = false
 ): Future[void] =
